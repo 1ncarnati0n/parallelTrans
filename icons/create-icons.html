@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Icon Generator</title>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    // 간단한 번역 아이콘 생성
+    const sizes = [16, 48, 128];
+
+    sizes.forEach(size => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // 배경 그라디언트
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#4A90E2');
+      gradient.addColorStop(1, '#357ABD');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+
+      // 텍스트 "A한" (영어-한국어 번역 의미)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `bold ${size * 0.4}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('A한', size / 2, size / 2);
+
+      // 다운로드
+      const link = document.createElement('a');
+      link.download = `icon${size}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    });
+
+    document.body.innerHTML = '<p>Icons generated! Check your downloads folder.</p>';
+  </script>
+</body>
+</html>

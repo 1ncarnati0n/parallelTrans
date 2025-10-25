@@ -1,0 +1,89 @@
+/* 번역 텍스트 스타일 */
+.parallel-trans-translation {
+  display: inline-block;
+  color: #2563eb;
+  font-size: 0.9em;
+  font-style: normal;
+  margin-left: 4px;
+  padding: 2px 4px;
+  background-color: rgba(37, 99, 235, 0.05);
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+/* 다크 모드 지원 */
+@media (prefers-color-scheme: dark) {
+  .parallel-trans-translation {
+    color: #60a5fa;
+    background-color: rgba(96, 165, 250, 0.1);
+  }
+}
+
+/* 호버 효과 */
+.parallel-trans-translation:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+  cursor: help;
+}
+
+@media (prefers-color-scheme: dark) {
+  .parallel-trans-translation:hover {
+    background-color: rgba(96, 165, 250, 0.15);
+  }
+}
+
+/* 번역 로딩 중 */
+.parallel-trans-loading {
+  opacity: 0.6;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* 번역만 표시 모드 */
+.parallel-trans-wrapper {
+  display: inline;
+}
+
+.parallel-trans-original {
+  display: none; /* 원문 숨김 */
+}
+
+.parallel-trans-translation-only {
+  display: inline;
+  color: #2563eb;
+  font-style: normal;
+}
+
+@media (prefers-color-scheme: dark) {
+  .parallel-trans-translation-only {
+    color: #60a5fa;
+  }
+}
+
+/* 번역문 호버시 원문 툴팁 표시 */
+.parallel-trans-translation-only:hover::after {
+  content: attr(data-original);
+  position: absolute;
+  background-color: #1f2937;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10000;
+  margin-top: 20px;
+  margin-left: -20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.parallel-trans-translation-only {
+  position: relative;
+  cursor: help;
+}
