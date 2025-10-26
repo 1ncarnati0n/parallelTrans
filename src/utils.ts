@@ -78,33 +78,44 @@ export class TranslationCache {
 
 // ============== 레이트 제한 ==============
 export class RateLimiter {
-  private tokens = { deepl: 5, microsoft: 200 };
-  private lastRefill = { deepl: Date.now(), microsoft: Date.now() };
-  private limits = { deepl: 1000, microsoft: 60000 }; // 시간 윈도우
+  // 요청 큐 및 타이밍 추적
+  private lastRequestTime = { deepl: 0, microsoft: 0 };
+  private requestQueue = { deepl: 0, microsoft: 0 };
+
+  // API 제한
+  // DeepL Free: 50만 자/월, 약 50 requests/분
+  // Microsoft: 1초당 100 요청 (약 1000 TPS)
+  private minInterval = { deepl: 1200, microsoft: 100 }; // ms 단위 최소 간격
 
   async waitForSlot(engine: 'deepl' | 'microsoft'): Promise<void> {
     const now = Date.now();
-    const timePassed = now - this.lastRefill[engine];
-    const limit = this.limits[engine];
-    const maxTokens = engine === 'deepl' ? 5 : 200;
+    const lastTime = this.lastRequestTime[engine];
+    const timeSinceLastRequest = now - lastTime;
+    const minInterval = this.minInterval[engine];
 
-    // 토큰 리필
-    if (timePassed >= limit) {
-      this.tokens[engine] = maxTokens;
-      this.lastRefill[engine] = now;
+    if (timeSinceLastRequest < minInterval) {
+      // 최소 간격 미달 시 대기
+      const waitTime = minInterval - timeSinceLastRequest;
+      console.log(`[RateLimiter] ${engine} 대기: ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
 
-    // 토큰 계산
-    const tokensToAdd = (timePassed / limit) * maxTokens;
-    this.tokens[engine] = Math.min(maxTokens, this.tokens[engine] + tokensToAdd);
+    this.lastRequestTime[engine] = Date.now();
+  }
 
-    // 토큰이 없으면 대기
-    if (this.tokens[engine] < 1) {
-      const waitTime = (limit / maxTokens) * (1 - this.tokens[engine]);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      this.tokens[engine] = 1;
-    } else {
-      this.tokens[engine] -= 1;
+  // 배치 요청의 경우 추가 체크 (문자 수 기반)
+  async waitForBatch(engine: 'deepl' | 'microsoft', totalChars: number): Promise<void> {
+    // 먼저 기본 레이트 제한 적용
+    await this.waitForSlot(engine);
+
+    // Microsoft의 경우 추가 제한 (1초당 100K 문자)
+    if (engine === 'microsoft' && totalChars > 1000) {
+      // 너무 큰 배치는 추가 대기
+      const extraWait = Math.max(0, totalChars / 10000 * 100);
+      if (extraWait > 0) {
+        console.log(`[RateLimiter] Microsoft 배치 크기로 인한 추가 대기: ${extraWait}ms`);
+        await new Promise(resolve => setTimeout(resolve, extraWait));
+      }
     }
   }
 }

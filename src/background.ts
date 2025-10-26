@@ -149,20 +149,44 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
       for (let i = 0; i < uncachedTexts.length; i += batchSize) {
         const batch = uncachedTexts.slice(i, i + batchSize);
         const texts = batch.map(b => b.text);
+        const totalChars = texts.reduce((sum, text) => sum + text.length, 0);
 
-        await rateLimiter.waitForSlot(settings.primaryEngine);
+        // 배치 크기를 고려한 레이트 제한
+        await rateLimiter.waitForBatch(settings.primaryEngine, totalChars);
 
-        const response = await manager.translateBatch(settings.primaryEngine, {
-          texts,
-          sourceLang: request.sourceLang,
-          targetLang: request.targetLang,
-        });
+        try {
+          const response = await manager.translateBatch(settings.primaryEngine, {
+            texts,
+            sourceLang: request.sourceLang,
+            targetLang: request.targetLang,
+          });
 
-        // 결과 매핑
-        batch.forEach((item, idx) => {
-          results[item.index] = response.translations[idx];
-          cache.set(item.text, response.translations[idx], request.sourceLang, request.targetLang, settings.primaryEngine);
-        });
+          // 결과 매핑
+          batch.forEach((item, idx) => {
+            results[item.index] = response.translations[idx];
+            cache.set(item.text, response.translations[idx], request.sourceLang, request.targetLang, settings.primaryEngine);
+          });
+        } catch (batchError) {
+          // 배치 번역 실패 시 보조 엔진으로 재시도
+          Logger.warn('Background', `${settings.primaryEngine} 배치 번역 실패, ${settings.fallbackEngine} 재시도`);
+          try {
+            await rateLimiter.waitForBatch(settings.fallbackEngine, totalChars);
+            const response = await manager.translateBatch(settings.fallbackEngine, {
+              texts,
+              sourceLang: request.sourceLang,
+              targetLang: request.targetLang,
+            });
+
+            // 결과 매핑
+            batch.forEach((item, idx) => {
+              results[item.index] = response.translations[idx];
+              cache.set(item.text, response.translations[idx], request.sourceLang, request.targetLang, settings.fallbackEngine);
+            });
+          } catch (fallbackError) {
+            Logger.error('Background', `배치 번역 완전 실패 (${texts.length}개 텍스트)`, fallbackError);
+            return { success: false, error: 'Batch translation failed' };
+          }
+        }
       }
     }
 

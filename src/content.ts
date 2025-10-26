@@ -101,7 +101,8 @@ function showToast(message: string) {
 
 // ============== 단축키 ==============
 function handleKeydown(e: KeyboardEvent) {
-  if ((e.altKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+  // Option+A (Mac: altKey, Windows: altKey) - Cmd는 제외
+  if (e.altKey && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 'a') {
     e.preventDefault();
     isActive = !isActive;
     const message = isActive ? '✅ 번역 ON' : '❌ 번역 OFF';
@@ -115,7 +116,8 @@ function handleKeydown(e: KeyboardEvent) {
     }
   }
 
-  if ((e.altKey || e.metaKey) && e.key.toLowerCase() === 'q') {
+  // Option+Q (Mac: altKey, Windows: altKey) - 표시 모드 전환
+  if (e.altKey && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 'q') {
     if (!settings) return;
     e.preventDefault();
     settings.displayMode = settings.displayMode === 'parallel' ? 'translation-only' : 'parallel';
@@ -228,17 +230,32 @@ async function processPendingTexts() {
 // ============== 텍스트 노드 추출 ==============
 function getTextNodes(root: Node): Node[] {
   const nodes: Node[] = [];
+  const excluded = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'IFRAME'];
+  // 스타일만 변경하는 요소들 (무시해도 됨)
+  const inlineFormatting = ['STRONG', 'EM', 'B', 'I', 'U', 'MARK', 'SMALL', 'SUP', 'SUB', 'SPAN'];
+
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
     acceptNode: (node) => {
       const element = node as Element;
-      const excluded = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'IFRAME'];
 
       if (excluded.includes(element.tagName)) return NodeFilter.FILTER_REJECT;
       if (element.closest('.parallel-trans-wrapper, .parallel-trans-trans')) {
         return NodeFilter.FILTER_REJECT;
       }
 
-      // 자식 요소가 있으면 계속 탐색
+      // 블록 요소 (p, h1-h6, div, li 등)인 경우 - 이들의 전체 텍스트를 번역
+      const blockElements = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION'];
+      if (blockElements.includes(element.tagName)) {
+        // 블록 요소는 번역 대상으로 수락
+        return NodeFilter.FILTER_ACCEPT;
+      }
+
+      // 인라인 포맷팅 요소는 건너뛰기 (부모에서 이미 처리됨)
+      if (inlineFormatting.includes(element.tagName)) {
+        return NodeFilter.FILTER_SKIP;
+      }
+
+      // 다른 컨테이너 요소는 계속 탐색
       if (element.children.length > 0) {
         return NodeFilter.FILTER_SKIP;
       }
@@ -253,7 +270,7 @@ function getTextNodes(root: Node): Node[] {
     const element = node as Element;
     const text = element.textContent?.trim() || '';
 
-    // 유효한 텍스트만 추가
+    // 유효한 텍스트만 추가 (최소 3글자 이상, 영문 포함)
     if (text.length >= 3 && /[a-zA-Z]/.test(text)) {
       nodes.push(element);
     }
