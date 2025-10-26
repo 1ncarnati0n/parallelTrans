@@ -1,0 +1,100 @@
+/* ParallelTrans - Translation Styles Only (No global reset) */
+
+/* API 번역 - 병렬 표기 */
+.parallel-trans-translation {
+  display: inline-block;
+  color: #2563eb;
+  font-size: 0.9em;
+  margin-left: 4px;
+  padding: 2px 4px;
+  background-color: rgba(37, 99, 235, 0.05);
+  border-radius: 4px;
+  line-height: normal;
+  cursor: help;
+  transition: background-color 0.2s;
+}
+
+.parallel-trans-translation:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .parallel-trans-translation {
+    color: #60a5fa;
+    background-color: rgba(96, 165, 250, 0.1);
+  }
+
+  .parallel-trans-translation:hover {
+    background-color: rgba(96, 165, 250, 0.15);
+  }
+}
+
+/* API 번역 - 번역만 표시 */
+.parallel-trans-wrapper {
+  display: inline;
+}
+
+.parallel-trans-original {
+  display: none;
+}
+
+.parallel-trans-translation-only {
+  display: inline;
+  position: relative;
+  color: #2563eb;
+  cursor: help;
+}
+
+.parallel-trans-translation-only:hover::after {
+  content: attr(data-original);
+  position: absolute;
+  background-color: #1f2937;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10000;
+  margin-top: 20px;
+  margin-left: -20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .parallel-trans-translation-only {
+    color: #60a5fa;
+  }
+}
+
+/* Chrome Translate 스타일 */
+.chrome-trans-original {
+  color: #888;
+  font-size: 0.9em;
+  font-style: italic;
+  font-weight: normal;
+}
+
+@media (prefers-color-scheme: dark) {
+  .chrome-trans-original {
+    color: #9ca3af;
+  }
+}
+
+.chrome-trans-wrapper {
+  display: inline;
+}
+
+/* 로딩 애니메이션 */
+.parallel-trans-loading {
+  opacity: 0.6;
+  animation: parallel-trans-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes parallel-trans-pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}

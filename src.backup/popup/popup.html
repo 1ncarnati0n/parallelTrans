@@ -27,15 +27,40 @@
         </div>
       </div>
 
-      <!-- 번역 엔진 선택 (3가지 옵션) -->
+      <!-- 번역 엔진 선택 (4가지 옵션) -->
       <div class="section">
         <label for="engineSelect">번역 엔진</label>
         <select id="engineSelect">
-          <option value="libretranslate-public">LibreTranslate 공개 서버 (무료, Docker 불필요)</option>
-          <option value="libretranslate-local">LibreTranslate 로컬 서버 (Docker 필요)</option>
-          <option value="deepl">DeepL (고품질, API 키 필요)</option>
+          <option value="chrome-translate">🌐 크롬 내장 구글 번역 병렬 표기 (무료, API 불필요)</option>
+          <option value="google-cloud">🌟 Google Cloud Translation (빠름, 고품질)</option>
+          <option value="microsoft">Microsoft Translator (무료 2백만자/월)</option>
+          <option value="deepl">DeepL (최고 품질)</option>
         </select>
         <small class="engine-info" id="engineInfo"></small>
+      </div>
+
+      <!-- Google Cloud API 키 -->
+      <div class="section" id="googleCloudSection" style="display: none;">
+        <label for="googleCloudApiKey">Google Cloud Translation API 키</label>
+        <input type="password" id="googleCloudApiKey" placeholder="Google Cloud API 키 입력">
+        <small>
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank">
+            Google Cloud API 키 발급받기 ($300 무료 크레딧)
+          </a>
+        </small>
+      </div>
+
+      <!-- Microsoft API 키 -->
+      <div class="section" id="microsoftSection" style="display: none;">
+        <label for="microsoftApiKey">Microsoft Translator API 키</label>
+        <input type="password" id="microsoftApiKey" placeholder="Microsoft API 키 입력">
+        <label for="microsoftRegion" style="margin-top: 10px;">Azure 리전</label>
+        <input type="text" id="microsoftRegion" placeholder="global" value="global">
+        <small>
+          <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation" target="_blank">
+            Microsoft Translator API 키 발급받기 (무료 2백만자/월)
+          </a>
+        </small>
       </div>
 
       <!-- DeepL API 키 -->
@@ -46,15 +71,6 @@
           <a href="https://www.deepl.com/pro-api" target="_blank">
             DeepL API 키 발급받기 (무료 50만자/월)
           </a>
-        </small>
-      </div>
-
-      <!-- LibreTranslate 로컬 서버 URL -->
-      <div class="section" id="libreLocalSection" style="display: none;">
-        <label for="libreUrl">LibreTranslate 로컬 서버 URL</label>
-        <input type="text" id="libreUrl" placeholder="http://localhost:5001">
-        <small>
-          Docker 실행: <code style="font-size: 11px;">docker run -p 5001:5000 libretranslate/libretranslate</code>
         </small>
       </div>
 
@@ -80,19 +96,17 @@
         </div>
       </div>
 
-      <!-- 번역 트리거 모드 (자동 vs 수동) -->
+      <!-- 단축키 안내 -->
       <div class="section">
-        <label>번역 실행 방식</label>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input type="radio" name="triggerMode" value="auto">
-            <span>페이지 로드시 자동 번역</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="triggerMode" value="manual" checked>
-            <span>단축키로 수동 번역 (<kbd>Option+A</kbd> 또는 <kbd>Alt+A</kbd>)</span>
-          </label>
+        <label>⌨️ 단축키</label>
+        <div class="shortcut-info">
+          <div><kbd>Option+A</kbd> (Mac) / <kbd>Alt+A</kbd> (Win): 번역 ON/OFF</div>
+          <div><kbd>Option+Q</kbd> (Mac) / <kbd>Alt+Q</kbd> (Win): 병렬/번역만 모드 전환</div>
         </div>
+        <small style="color: #666; font-size: 0.85em;">
+          * Chrome Translate: Option+A로 병렬표기 켜기/끄기<br>
+          * API 번역: Option+A로 번역 시작/종료, Option+Q로 표시 전환
+        </small>
       </div>
 
       <!-- 번역 표시 모드 (병행 표기 vs 한글만) -->
@@ -123,7 +137,7 @@
     </main>
 
     <footer>
-      <p>v2.0.0 | 3 Engines + Smart Trigger</p>
+      <p>v2.0.0 | Chrome Translate + 3 Premium Engines</p>
     </footer>
   </div>
 

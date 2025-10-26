@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ParallelTrans</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      width: 450px;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #333;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 8px;
+      color: #667eea;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 12px;
+    }
+
+    h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 20px 0 12px;
+      color: #333;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    label {
+      display: block;
+      margin: 10px 0 4px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+      cursor: pointer;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      margin: 12px 0;
+      cursor: pointer;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.3s;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status {
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+      border-left: 4px solid;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border-left-color: #28a745;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border-left-color: #dc3545;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .row > div input, .row > div select {
+      margin-bottom: 0;
+    }
+
+    .row > div label {
+      margin-bottom: 6px;
+    }
+
+    #stats {
+      font-size: 11px;
+      color: #999;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+      line-height: 1.6;
+    }
+
+    .help-text {
+      font-size: 11px;
+      color: #999;
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    .engine-section {
+      background: #f9f9f9;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .engine-status {
+      font-size: 11px;
+      color: #999;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚡ ParallelTrans</h1>
+    <div class="subtitle">빠르고 효율적인 병렬 번역 | Option+A: 번역 ON/OFF</div>
+
+    <div id="status" class="status"></div>
+
+    <label class="checkbox-label">
+      <input type="checkbox" id="enabled">
+      <span>번역 활성화</span>
+    </label>
+
+    <!-- 번역 엔진 설정 -->
+    <h2>🚀 번역 엔진</h2>
+    <div class="row">
+      <div>
+        <label>우선 엔진</label>
+        <select id="primaryEngine">
+          <option value="deepl">DeepL</option>
+          <option value="microsoft">Microsoft</option>
+        </select>
+      </div>
+      <div>
+        <label>백업 엔진</label>
+        <select id="fallbackEngine">
+          <option value="deepl">DeepL</option>
+          <option value="microsoft">Microsoft</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- DeepL API 설정 -->
+    <h2>🔑 DeepL API</h2>
+    <div class="engine-section">
+      <label>API Key</label>
+      <input type="password" id="deeplKey" placeholder="sk-xxx... (Free/Pro 키)">
+      <div class="help-text">
+        💡 <a href="https://www.deepl.com/pro" target="_blank" style="color: #667eea; text-decoration: none;">DeepL API 키 받기</a> | Free: 50만자/월 | Pro: 무제한
+      </div>
+    </div>
+
+    <!-- Microsoft API 설정 -->
+    <h2>🔑 Microsoft API</h2>
+    <div class="engine-section">
+      <label>API Key</label>
+      <input type="password" id="microsoftKey" placeholder="xxxxxxxx...">
+
+      <label>Azure 리전</label>
+      <input type="text" id="microsoftRegion" placeholder="예: koreacentral" value="global">
+      <div class="help-text">
+        💡 <a href="https://azure.microsoft.com" target="_blank" style="color: #667eea; text-decoration: none;">Azure에서 키 발급</a> | Free: 200만자/월
+      </div>
+    </div>
+
+    <!-- 번역 설정 -->
+    <h2>⚙️ 번역 설정</h2>
+    <div class="row">
+      <div>
+        <label>원본 언어</label>
+        <select id="sourceLang">
+          <option value="en">English</option>
+          <option value="ko">한국어</option>
+          <option value="ja">日本語</option>
+          <option value="zh">中文</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+        </select>
+      </div>
+      <div>
+        <label>대상 언어</label>
+        <select id="targetLang">
+          <option value="en">English</option>
+          <option value="ko">한국어</option>
+          <option value="ja">日本語</option>
+          <option value="zh">中文</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+        </select>
+      </div>
+    </div>
+
+    <label>표시 방식</label>
+    <select id="displayMode">
+      <option value="parallel">병렬 표기 (원문 [번역])</option>
+      <option value="translation-only">번역만 표시</option>
+    </select>
+
+    <label>배치 크기 (한 번에 번역할 문장 수)</label>
+    <input type="number" id="batchSize" min="1" max="50" value="10">
+
+    <button id="saveBtn">💾 설정 저장</button>
+
+    <div id="stats"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

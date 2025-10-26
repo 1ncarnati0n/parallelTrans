@@ -5,15 +5,23 @@ import { Settings } from '../types';
  */
 export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
-  engine: 'libretranslate-public',        // 기본값: 공개 서버 (Docker 불필요)
   deeplApiKey: '',
-  libretranslateUrl: 'https://libretranslate.com',  // 공개 서버
+  deeplIsFree: true,                      // DeepL Free tier 여부
+  microsoftApiKey: '',
+  microsoftRegion: 'global',              // Microsoft Azure 리전
   sourceLang: 'en',
   targetLang: 'ko',
   excludedSites: [],
   triggerMode: 'manual',                  // 기본값: Option+A로 번역
   displayMode: 'parallel',                // 기본값: 병행 표기
-  keyboardShortcut: 'Alt+A'               // Mac: Option+A, Windows: Alt+A
+  keyboardShortcut: 'Alt+A',              // Mac: Option+A, Windows: Alt+A
+  primaryEngine: 'deepl',                 // 우선 사용 엔진
+  fallbackEngine: 'microsoft',            // 폴백 엔진
+  enableBatchTranslation: true,           // 배치 번역 활성화
+  batchSize: 10,                          // 배치당 텍스트 수
+  cacheEnabled: true,                     // 캐시 활성화
+  cacheTTL: 60,                           // 캐시 유효시간 (분)
+  viewportTranslation: true,              // Viewport 기반 번역
 };
 
 /**

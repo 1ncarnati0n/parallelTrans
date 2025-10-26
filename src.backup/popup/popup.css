@@ -292,3 +292,25 @@ code {
   border-radius: 3px;
   font-size: 11px;
 }
+
+.shortcut-info {
+  background: #f3f4f6;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.shortcut-info div {
+  padding: 4px 0;
+  color: #374151;
+}
+
+.shortcut-info kbd {
+  background: #374151;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: monospace;
+}
+
