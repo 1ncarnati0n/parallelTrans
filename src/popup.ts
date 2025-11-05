@@ -2,7 +2,7 @@
  * Popup Script
  */
 
-import { Settings } from './types';
+import { Settings, Message, UpdateSettingsMessage, DisplayMode, TranslationEngine } from './types';
 
 // ============== DOM ==============
 const els = {
@@ -15,7 +15,6 @@ const els = {
   sourceLang: document.getElementById('sourceLang') as HTMLSelectElement,
   targetLang: document.getElementById('targetLang') as HTMLSelectElement,
   displayMode: document.getElementById('displayMode') as HTMLSelectElement,
-  batchSize: document.getElementById('batchSize') as HTMLInputElement,
   saveBtn: document.getElementById('saveBtn') as HTMLButtonElement,
   status: document.getElementById('status') as HTMLDivElement,
   stats: document.getElementById('stats') as HTMLDivElement,
@@ -24,7 +23,7 @@ const els = {
 // ============== 초기화 ==============
 async function init() {
   try {
-    const settings = await chrome.runtime.sendMessage({ type: 'getSettings' });
+    const settings = await chrome.runtime.sendMessage({ type: 'getSettings' } as Message) as Settings;
     updateUI(settings);
 
     els.saveBtn.addEventListener('click', handleSave);
@@ -46,7 +45,6 @@ function updateUI(settings: Settings) {
   els.sourceLang.value = settings.sourceLang;
   els.targetLang.value = settings.targetLang;
   els.displayMode.value = settings.displayMode;
-  els.batchSize.value = String(settings.batchSize);
 }
 
 // ============== 저장 ==============
@@ -69,18 +67,17 @@ async function handleSave() {
       deeplApiKey: deeplKey,
       microsoftApiKey: microsoftKey,
       microsoftRegion: els.microsoftRegion.value.trim() || 'global',
-      primaryEngine: els.primaryEngine.value as any,
-      fallbackEngine: els.fallbackEngine.value as any,
+      primaryEngine: els.primaryEngine.value as TranslationEngine,
+      fallbackEngine: els.fallbackEngine.value as TranslationEngine,
       sourceLang: els.sourceLang.value,
       targetLang: els.targetLang.value,
-      displayMode: els.displayMode.value as any,
-      batchSize: parseInt(els.batchSize.value) || 10,
+      displayMode: els.displayMode.value as DisplayMode,
     };
 
     await chrome.runtime.sendMessage({
       type: 'updateSettings',
       data: newSettings,
-    });
+    } as UpdateSettingsMessage);
 
     showStatus('✅ 설정이 저장되었습니다!', 'success');
     loadStats();
@@ -95,7 +92,7 @@ async function handleSave() {
 // ============== 캐시 통계 ==============
 async function loadStats() {
   try {
-    const stats = await chrome.runtime.sendMessage({ type: 'getCacheStats' });
+    const stats = await chrome.runtime.sendMessage({ type: 'getCacheStats' } as Message);
     if (stats && els.stats) {
       els.stats.innerHTML = `
         Cache: ${stats.memorySize} items | Hit: ${stats.hitRate}% | Requests: ${stats.totalRequests}

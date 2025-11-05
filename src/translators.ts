@@ -2,7 +2,7 @@
  * Translation Engines
  */
 
-import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse } from './types';
+import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, ApiError, TranslationEngine } from './types';
 import { Logger } from './utils';
 
 // ============== DeepL ==============
@@ -32,9 +32,47 @@ export class DeepL {
       body: params.toString(),
     });
 
-    if (!response.ok) throw new Error(`DeepL error: ${response.status}`);
+    if (!response.ok) {
+      let errorMessage = `DeepL error: ${response.status}`;
+      let errorDetails: unknown;
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.error?.message || errorMessage;
+        errorDetails = errorData;
+      } catch {
+        // JSON 파싱 실패 시 텍스트로 시도
+        try {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        } catch {
+          // 무시
+        }
+      }
+      
+      const apiError: ApiError = {
+        status: response.status,
+        message: errorMessage,
+        engine: 'deepl',
+        details: errorDetails,
+      };
+      
+      Logger.error('DeepL', `Translation failed: ${errorMessage}`, apiError);
+      throw apiError;
+    }
 
     const data = await response.json();
+    
+    if (!data.translations || !data.translations[0] || !data.translations[0].text) {
+      const error: ApiError = {
+        status: response.status,
+        message: 'Invalid response format from DeepL',
+        engine: 'deepl',
+        details: data,
+      };
+      throw error;
+    }
+    
     return {
       translatedText: data.translations[0].text,
       engine: 'deepl',
@@ -56,11 +94,48 @@ export class DeepL {
       body: params.toString(),
     });
 
-    if (!response.ok) throw new Error(`DeepL batch error: ${response.status}`);
+    if (!response.ok) {
+      let errorMessage = `DeepL batch error: ${response.status}`;
+      let errorDetails: unknown;
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.error?.message || errorMessage;
+        errorDetails = errorData;
+      } catch {
+        try {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        } catch {
+          // 무시
+        }
+      }
+      
+      const apiError: ApiError = {
+        status: response.status,
+        message: errorMessage,
+        engine: 'deepl',
+        details: errorDetails,
+      };
+      
+      Logger.error('DeepL', `Batch translation failed: ${errorMessage}`, apiError);
+      throw apiError;
+    }
 
     const data = await response.json();
+    
+    if (!data.translations || !Array.isArray(data.translations)) {
+      const error: ApiError = {
+        status: response.status,
+        message: 'Invalid batch response format from DeepL',
+        engine: 'deepl',
+        details: data,
+      };
+      throw error;
+    }
+    
     return {
-      translations: data.translations.map((t: any) => t.text),
+      translations: data.translations.map((t: { text: string }) => t.text),
       engine: 'deepl',
     };
   }
@@ -102,9 +177,46 @@ export class Microsoft {
       body: JSON.stringify([{ text: request.text }]),
     });
 
-    if (!response.ok) throw new Error(`Microsoft error: ${response.status}`);
+    if (!response.ok) {
+      let errorMessage = `Microsoft error: ${response.status}`;
+      let errorDetails: unknown;
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error?.message || errorMessage;
+        errorDetails = errorData;
+      } catch {
+        try {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        } catch {
+          // 무시
+        }
+      }
+      
+      const apiError: ApiError = {
+        status: response.status,
+        message: errorMessage,
+        engine: 'microsoft',
+        details: errorDetails,
+      };
+      
+      Logger.error('Microsoft', `Translation failed: ${errorMessage}`, apiError);
+      throw apiError;
+    }
 
     const data = await response.json();
+    
+    if (!Array.isArray(data) || !data[0] || !data[0].translations || !data[0].translations[0] || !data[0].translations[0].text) {
+      const error: ApiError = {
+        status: response.status,
+        message: 'Invalid response format from Microsoft',
+        engine: 'microsoft',
+        details: data,
+      };
+      throw error;
+    }
+    
     return {
       translatedText: data[0].translations[0].text,
       engine: 'microsoft',
@@ -124,11 +236,48 @@ export class Microsoft {
       body: JSON.stringify(request.texts.map(text => ({ text }))),
     });
 
-    if (!response.ok) throw new Error(`Microsoft batch error: ${response.status}`);
+    if (!response.ok) {
+      let errorMessage = `Microsoft batch error: ${response.status}`;
+      let errorDetails: unknown;
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error?.message || errorMessage;
+        errorDetails = errorData;
+      } catch {
+        try {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        } catch {
+          // 무시
+        }
+      }
+      
+      const apiError: ApiError = {
+        status: response.status,
+        message: errorMessage,
+        engine: 'microsoft',
+        details: errorDetails,
+      };
+      
+      Logger.error('Microsoft', `Batch translation failed: ${errorMessage}`, apiError);
+      throw apiError;
+    }
 
     const data = await response.json();
+    
+    if (!Array.isArray(data) || data.length !== request.texts.length) {
+      const error: ApiError = {
+        status: response.status,
+        message: 'Invalid batch response format from Microsoft',
+        engine: 'microsoft',
+        details: data,
+      };
+      throw error;
+    }
+    
     return {
-      translations: data.map((item: any) => item.translations[0].text),
+      translations: data.map((item: { translations: Array<{ text: string }> }) => item.translations[0].text),
       engine: 'microsoft',
     };
   }

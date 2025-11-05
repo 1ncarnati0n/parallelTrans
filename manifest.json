@@ -4,7 +4,7 @@
   "version": "3.0.0",
   "description": "DeepL & Microsoft를 이용한 병렬 번역 Chrome 확장프로그램",
 
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
 
   "host_permissions": [
     "https://api-free.deepl.com/*",

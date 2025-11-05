@@ -1,6 +1,11 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const webpack = require('webpack');
+const dotenv = require('dotenv');
+
+// Load .env file
+dotenv.config();
 
 module.exports = {
   mode: 'production',
@@ -46,6 +51,12 @@ module.exports = {
         { from: 'src/popup.html', to: 'popup.html' },
         { from: 'src/content.css', to: 'content.css' }
       ]
+    }),
+    new webpack.DefinePlugin({
+      'process.env': {
+        'DEEPL_API_KEY': JSON.stringify(process.env.DEEPL_API_KEY || ''),
+        'AZURE_TRANSLATION_KEY': JSON.stringify(process.env.AZURE_TRANSLATION_KEY || '')
+      }
     })
   ],
 

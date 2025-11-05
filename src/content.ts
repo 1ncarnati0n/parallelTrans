@@ -2,13 +2,14 @@
  * Content Script
  */
 
-import { Settings, BatchTranslationRequest, CONSTANTS } from './types';
+import { Settings, BatchTranslationRequest, CONSTANTS, Message, SettingsUpdatedMessage } from './types';
 
 let settings: Settings | null = null;
 let isActive = false;
 let isProcessing = false; // Race condition 방지
 // 번역된 텍스트 노드 추적 (부모 요소 + 텍스트 내용 기반)
-const translatedTexts = new Set<string>();
+// LRU 방식으로 메모리 관리
+const translatedTexts = new Map<string, number>(); // key -> timestamp
 const pendingTexts: { node: Text; text: string; originalText: string; startIndex: number; endIndex: number }[] = [];
 // 텍스트 노드별 청크 그룹화
 const nodeChunksMap = new Map<Text, { text: string; startIndex: number; endIndex: number; translation?: string }[]>();
@@ -17,7 +18,7 @@ let processingTimer: number | null = null;
 
 
 // ============== 초기화 ==============
-function initSettings() {
+async function initSettings(): Promise<void> {
   // 기본 설정 (Background에서 설정 가져오면 덮어씀)
   settings = {
     enabled: true,
@@ -30,31 +31,54 @@ function initSettings() {
     primaryEngine: 'deepl',
     fallbackEngine: 'microsoft',
     displayMode: 'parallel',
-    batchSize: CONSTANTS.DEFAULT_BATCH_SIZE,
     cacheEnabled: true,
     viewportTranslation: true,
   };
 
-  // Background에서 설정 가져오기
-  chrome.runtime.sendMessage({ type: 'getSettings' }, (response) => {
+  // Background에서 설정 가져오기 (비동기 대기)
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'getSettings' } as Message);
     if (response && !chrome.runtime.lastError) {
-      settings = response;
+      settings = response as Settings;
       console.log('[ParallelTrans] Settings loaded:', settings);
     }
-  });
+  } catch (error) {
+    console.warn('[ParallelTrans] Failed to load settings:', error);
+  }
 }
 
-function init() {
+async function init() {
   try {
-    initSettings();
+    await initSettings();
 
     document.addEventListener('keydown', handleKeydown);
     chrome.runtime.onMessage.addListener(handleMessage);
     setupMutationObserver();
+    
+    // 페이지 언로드 시 정리
+    window.addEventListener('beforeunload', cleanup);
 
     console.log('[ParallelTrans] ✅ Content script ready');
   } catch (error) {
     console.error('[ParallelTrans] Init error:', error);
+  }
+}
+
+// ============== 정리 ==============
+function cleanup() {
+  // 메모리 정리
+  translatedTexts.clear();
+  nodeChunksMap.clear();
+  pendingTexts.length = 0;
+  
+  if (mutationObserver) {
+    mutationObserver.disconnect();
+    mutationObserver = null;
+  }
+  
+  if (processingTimer !== null) {
+    clearTimeout(processingTimer);
+    processingTimer = null;
   }
 }
 
@@ -134,9 +158,17 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 // ============== 메시지 핸들러 ==============
-function handleMessage(message: any) {
+function handleMessage(message: Message): void {
   if (message.type === 'settingsUpdated') {
-    settings = message.settings;
+    const settingsMessage = message as SettingsUpdatedMessage;
+    settings = settingsMessage.settings;
+    console.log('[ParallelTrans] Settings updated:', settings);
+    
+    // 번역이 활성화되어 있으면 다시 번역
+    if (isActive) {
+      removeTranslations();
+      translatePage();
+    }
   }
 }
 
@@ -152,6 +184,9 @@ function setupMutationObserver() {
             const textNode = node as Text;
             const nodeKey = getNodeKey(textNode);
             if (translatedTexts.has(nodeKey)) return;
+            
+            // 메모리 정리 필요 시 수행
+            cleanupTranslatedTexts();
             
             const text = textNode.textContent?.trim() || '';
             if (text && text.length >= CONSTANTS.MIN_TEXT_LENGTH && /[a-zA-Z]/.test(text)) {
@@ -186,6 +221,9 @@ function setupMutationObserver() {
               segments.forEach(segment => {
                 const nodeKey = getNodeKey(segment.node);
                 if (translatedTexts.has(nodeKey)) return;
+                
+                // 메모리 정리 필요 시 수행
+                cleanupTranslatedTexts();
                 
                 const chunks = smartChunking(segment.sentences);
                 const chunkInfos: { text: string; startIndex: number; endIndex: number }[] = [];
@@ -328,9 +366,29 @@ function getNodeKey(node: Text): string {
 }
 
 /**
+ * translatedTexts Map 크기 제한 및 오래된 항목 제거
+ */
+function cleanupTranslatedTexts(): void {
+  if (translatedTexts.size <= CONSTANTS.MAX_TRANSLATED_NODES) {
+    return;
+  }
+  
+  // 가장 오래된 항목들 제거 (50% 제거)
+  const entries = Array.from(translatedTexts.entries())
+    .sort((a, b) => a[1] - b[1]); // timestamp 기준 정렬
+  
+  const removeCount = Math.floor(entries.length / 2);
+  for (let i = 0; i < removeCount; i++) {
+    translatedTexts.delete(entries[i][0]);
+  }
+  
+  console.log(`[ParallelTrans] Cleaned up ${removeCount} old translated nodes`);
+}
+
+/**
  * pendingTexts에 항목 추가 (메모리 누수 방지)
  */
-function addPendingText(node: Text, text: string, originalText: string, startIndex: number, endIndex: number) {
+function addPendingText(node: Text, text: string, originalText: string, startIndex: number, endIndex: number): void {
   // 이미 번역된 텍스트 노드는 스킵
   const nodeKey = getNodeKey(node);
   if (translatedTexts.has(nodeKey)) return;
@@ -373,7 +431,7 @@ async function processPendingTexts() {
 
   try {
     while (pendingTexts.length > 0) {
-      const batch = pendingTexts.splice(0, settings.batchSize);
+      const batch = pendingTexts.splice(0, CONSTANTS.DEFAULT_BATCH_SIZE);
       const texts = batch.map(b => b.text);
 
       try {
@@ -485,6 +543,9 @@ function getTextNodes(root: Node): TextNodeSegment[] {
     const nodeKey = getNodeKey(node);
     if (translatedTexts.has(nodeKey)) continue;
     
+    // 메모리 정리 필요 시 수행
+    cleanupTranslatedTexts();
+    
     const text = node.textContent?.trim() || '';
     if (!text) continue;
     
@@ -534,11 +595,17 @@ function splitIntoSentences(text: string): string[] {
  * 텍스트 노드의 모든 청크 번역 처리
  * 모든 청크가 번역 완료되었을 때만 DOM 조작 수행
  */
-function processNodeTranslations(textNode: Text) {
+function processNodeTranslations(textNode: Text): void {
   if (!settings || !textNode.parentElement) return;
   
   const nodeKey = getNodeKey(textNode);
   if (translatedTexts.has(nodeKey)) return;
+  
+  // 노드가 여전히 DOM에 존재하는지 확인
+  if (!document.contains(textNode)) {
+    console.warn('[ParallelTrans] Node no longer in DOM, skipping');
+    return;
+  }
   
   const chunks = nodeChunksMap.get(textNode);
   if (!chunks || chunks.length === 0) return;
@@ -600,24 +667,46 @@ function processNodeTranslations(textNode: Text) {
     }
   }
   
-  // 텍스트 노드 교체
-  parent.replaceChild(fragment, textNode);
+  // 부모 노드가 여전히 존재하는지 최종 확인
+  if (!parent.parentElement || !document.contains(parent)) {
+    console.warn('[ParallelTrans] Parent node no longer in DOM, skipping replacement');
+    return;
+  }
   
-  // 번역 완료 표시
-  translatedTexts.add(nodeKey);
-  nodeChunksMap.delete(textNode);
+  try {
+    // 텍스트 노드 교체
+    parent.replaceChild(fragment, textNode);
+    
+    // 번역 완료 표시 (타임스탬프 포함)
+    translatedTexts.set(nodeKey, Date.now());
+    nodeChunksMap.delete(textNode);
+  } catch (error) {
+    console.error('[ParallelTrans] Failed to replace text node:', error);
+    // 노드가 이미 제거되었을 수 있음
+  }
 }
 
 
-function removeTranslations() {
+function removeTranslations(): void {
   // 번역 표시 제거
-  document.querySelectorAll('.parallel-trans-trans').forEach(el => el.remove());
+  document.querySelectorAll('.parallel-trans-trans').forEach(el => {
+    try {
+      el.remove();
+    } catch (error) {
+      console.warn('[ParallelTrans] Failed to remove translation element:', error);
+    }
+  });
 
   // 번역 래퍼를 원본 텍스트로 복원
-  document.querySelectorAll('.parallel-trans-wrapper').forEach((wrapper: any) => {
-    const parent = wrapper.parentElement;
-    if (parent) {
-      parent.replaceChild(document.createTextNode(wrapper.title || wrapper.textContent), wrapper);
+  document.querySelectorAll('.parallel-trans-wrapper').forEach((wrapper) => {
+    try {
+      const parent = wrapper.parentElement;
+      if (parent && document.contains(parent)) {
+        const originalText = (wrapper as HTMLElement).getAttribute('title') || wrapper.textContent || '';
+        parent.replaceChild(document.createTextNode(originalText), wrapper);
+      }
+    } catch (error) {
+      console.warn('[ParallelTrans] Failed to restore original text:', error);
     }
   });
   

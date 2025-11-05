@@ -33,33 +33,51 @@ export class TranslationCache {
   private maxAge = CONSTANTS.CACHE_TTL_MS;
   private stats = { totalRequests: 0, cachedRequests: 0 };
 
-  private getCacheKey(text: string, sourceLang: string, targetLang: string): string {
-    return `${sourceLang}:${targetLang}:${text}`;
+  private getCacheKey(text: string, sourceLang: string, targetLang: string, engine?: TranslationEngine): string {
+    // 엔진 정보도 포함하여 동일 텍스트의 다른 엔진 번역 결과 구분
+    const enginePrefix = engine ? `${engine}:` : '';
+    return `${enginePrefix}${sourceLang}:${targetLang}:${text}`;
   }
 
-  async get(text: string, sourceLang: string, targetLang: string): Promise<CacheEntry | null> {
+  async get(text: string, sourceLang: string, targetLang: string, engine?: TranslationEngine): Promise<CacheEntry | null> {
     this.stats.totalRequests++;
-    const key = this.getCacheKey(text, sourceLang, targetLang);
-    const entry = this.cache.get(key);
-
-    if (!entry) return null;
-
-    // TTL 체크
-    if (Date.now() - entry.timestamp > this.maxAge) {
-      this.cache.delete(key);
-      return null;
+    // 엔진별로 캐시 조회 시도 (엔진 없으면 모든 엔진 검색)
+    if (engine) {
+      const key = this.getCacheKey(text, sourceLang, targetLang, engine);
+      const entry = this.cache.get(key);
+      if (entry) {
+        // TTL 체크
+        if (Date.now() - entry.timestamp > this.maxAge) {
+          this.cache.delete(key);
+          return null;
+        }
+        // LRU: 최근 사용 항목으로 이동
+        this.cache.delete(key);
+        this.cache.set(key, entry);
+        this.stats.cachedRequests++;
+        return entry;
+      }
+    } else {
+      // 엔진이 지정되지 않으면 모든 엔진 검색
+      for (const eng of ['deepl', 'microsoft'] as TranslationEngine[]) {
+        const key = this.getCacheKey(text, sourceLang, targetLang, eng);
+        const entry = this.cache.get(key);
+        if (entry && Date.now() - entry.timestamp <= this.maxAge) {
+          // LRU: 최근 사용 항목으로 이동
+          this.cache.delete(key);
+          this.cache.set(key, entry);
+          this.stats.cachedRequests++;
+          return entry;
+        }
+      }
     }
+    
+    return null;
 
-    // LRU: 최근 사용 항목으로 이동
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-
-    this.stats.cachedRequests++;
-    return entry;
   }
 
   async set(text: string, translation: string, sourceLang: string, targetLang: string, engine: TranslationEngine): Promise<void> {
-    const key = this.getCacheKey(text, sourceLang, targetLang);
+    const key = this.getCacheKey(text, sourceLang, targetLang, engine);
 
     // LRU eviction: 가장 오래된 항목 제거
     if (this.cache.size >= this.maxSize) {

@@ -15,6 +15,7 @@ export const CONSTANTS = {
 
   // 메모리 제한
   MAX_PENDING_TEXTS: 1000,
+  MAX_TRANSLATED_NODES: 5000, // translatedTexts Set 최대 크기
 
   // 배치 처리
   DEFAULT_BATCH_SIZE: 10,
@@ -26,8 +27,8 @@ export const CONSTANTS = {
   RATE_LIMIT_MICROSOFT: 100,
 
   // API 기본 키 (환경 변수에서 로드)
-  DEFAULT_DEEPL_API_KEY: '',
-  DEFAULT_MICROSOFT_API_KEY: '',
+  DEFAULT_DEEPL_API_KEY: process.env.DEEPL_API_KEY || '',
+  DEFAULT_MICROSOFT_API_KEY: process.env.AZURE_TRANSLATION_KEY || '',
 } as const;
 
 // ============== 번역 엔진 ==============
@@ -70,7 +71,6 @@ export interface Settings {
   primaryEngine: TranslationEngine;
   fallbackEngine: TranslationEngine;
   displayMode: DisplayMode;
-  batchSize: number;
   cacheEnabled: boolean;
   viewportTranslation: boolean;
 }
@@ -83,18 +83,70 @@ export interface CacheEntry {
 }
 
 // ============== 메시지 ==============
-export type MessageType = 'translate' | 'batchTranslate' | 'getSettings' | 'updateSettings' | 'getCacheStats';
+export type MessageType = 
+  | 'translate' 
+  | 'batchTranslate' 
+  | 'getSettings' 
+  | 'updateSettings' 
+  | 'getCacheStats'
+  | 'settingsUpdated'
+  | 'translationToggle';
 
-export interface Message {
-  type: MessageType;
-  data?: any;
+export interface TranslateMessage {
+  type: 'translate';
+  data: TranslationRequest;
 }
+
+export interface BatchTranslateMessage {
+  type: 'batchTranslate';
+  data: BatchTranslationRequest;
+}
+
+export interface GetSettingsMessage {
+  type: 'getSettings';
+}
+
+export interface UpdateSettingsMessage {
+  type: 'updateSettings';
+  data: Partial<Settings>;
+}
+
+export interface GetCacheStatsMessage {
+  type: 'getCacheStats';
+}
+
+export interface SettingsUpdatedMessage {
+  type: 'settingsUpdated';
+  settings: Settings;
+}
+
+export interface TranslationToggleMessage {
+  type: 'translationToggle';
+  enabled: boolean;
+}
+
+export type Message = 
+  | TranslateMessage
+  | BatchTranslateMessage
+  | GetSettingsMessage
+  | UpdateSettingsMessage
+  | GetCacheStatsMessage
+  | SettingsUpdatedMessage
+  | TranslationToggleMessage;
 
 export interface TranslationResult {
   success: boolean;
   translation?: string;
   translations?: string[];
   error?: string;
+}
+
+// ============== API 에러 ==============
+export interface ApiError {
+  status: number;
+  message: string;
+  engine: TranslationEngine;
+  details?: unknown;
 }
 
 // ============== 캐시 통계 ==============
