@@ -22,6 +22,10 @@ export const CONSTANTS = {
   BATCH_PROCESSING_DELAY_MS: 50,
   BATCH_INTERVAL_DELAY_MS: 30,
 
+  // 텍스트 청킹
+  MAX_CHUNK_LENGTH: 500,
+  MAX_CHUNK_SENTENCES: 5,
+
   // Rate Limiting (ms)
   RATE_LIMIT_DEEPL: 100,
   RATE_LIMIT_MICROSOFT: 50,
@@ -29,6 +33,12 @@ export const CONSTANTS = {
   // API 기본 키 (환경 변수에서 로드)
   DEFAULT_DEEPL_API_KEY: process.env.DEEPL_API_KEY || '',
   DEFAULT_MICROSOFT_API_KEY: process.env.AZURE_TRANSLATION_KEY || '',
+
+  // 블록 레벨 요소
+  BLOCK_ELEMENTS: ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'FIGCAPTION'],
+
+  // 제외할 요소
+  EXCLUDED_ELEMENTS: ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'IFRAME', 'SVG'],
 } as const;
 
 // ============== 번역 엔진 ==============

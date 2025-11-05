@@ -1,0 +1,93 @@
+/**
+ * Translation Renderer Module
+ * 번역 결과를 DOM에 렌더링하는 담당
+ */
+
+import { DisplayMode, CONSTANTS } from '../types';
+import { TextChunk } from './TextExtractor';
+
+export class TranslationRenderer {
+  private readonly originalTexts = new WeakMap<Text, string>();
+  private readonly translatedNodes = new Set<Text>();
+  private readonly highlightedBlocks = new Set<Element>();
+  private readonly blockTags = new Set<string>(CONSTANTS.BLOCK_ELEMENTS);
+
+  /**
+   * 텍스트 노드에 번역 결과를 적용
+   */
+  renderTranslation(textNode: Text, chunks: TextChunk[], displayMode: DisplayMode): boolean {
+    const parent = textNode.parentElement;
+    if (!parent) return false;
+    if (!document.contains(textNode)) return false;
+
+    const allTranslated = chunks.every(chunk => typeof chunk.translation === 'string');
+    if (!allTranslated) return false;
+
+    if (!this.originalTexts.has(textNode)) {
+      this.originalTexts.set(textNode, textNode.textContent ?? '');
+    }
+
+    const originalText = this.originalTexts.get(textNode) ?? '';
+    const translatedText = this.buildTranslatedText(chunks);
+
+    if (displayMode === 'parallel') {
+      const combined = translatedText ? `${originalText} [${translatedText}]` : originalText;
+      textNode.textContent = combined;
+    } else {
+      textNode.textContent = translatedText || originalText;
+    }
+
+    this.translatedNodes.add(textNode);
+
+    const block = this.findBlockElement(textNode);
+    if (block && !this.highlightedBlocks.has(block)) {
+      block.classList.add('parallel-trans-block');
+      this.highlightedBlocks.add(block);
+    }
+
+    return true;
+  }
+
+  /**
+   * 번역 표시 제거 및 원문 복원
+   */
+  removeTranslations(): void {
+    this.translatedNodes.forEach((node) => {
+      const original = this.originalTexts.get(node);
+      if (original !== undefined && node.isConnected) {
+        node.textContent = original;
+      }
+    });
+    this.translatedNodes.clear();
+
+    this.highlightedBlocks.forEach((block) => {
+      if (block.isConnected) {
+        block.classList.remove('parallel-trans-block');
+      }
+    });
+    this.highlightedBlocks.clear();
+  }
+
+  private buildTranslatedText(chunks: TextChunk[]): string {
+    const sorted = [...chunks].sort((a, b) => a.startIndex - b.startIndex);
+    const combined = sorted
+      .map(chunk => chunk.translation ?? '')
+      .join(' ')
+      .replace(/\s+([.,!?;:])/g, '$1')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    return combined;
+  }
+
+  private findBlockElement(textNode: Text): Element | null {
+    let current: Element | null = textNode.parentElement;
+    while (current && current !== document.body) {
+      if (this.blockTags.has(current.tagName)) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return textNode.parentElement;
+  }
+}
+

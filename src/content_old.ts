@@ -66,6 +66,8 @@ async function init() {
     document.addEventListener('keydown', handleKeydown);
     chrome.runtime.onMessage.addListener(handleMessage);
     setupMutationObserver();
+    
+    // 페이지 언로드 시 정리
     window.addEventListener('beforeunload', cleanup);
 
     console.log('[ParallelTrans] ✅ Content script ready');
@@ -80,12 +82,12 @@ function cleanup() {
   translatedTexts.clear();
   nodeChunksMap.clear();
   pendingTexts.length = 0;
-
+  
   if (mutationObserver) {
     mutationObserver.disconnect();
     mutationObserver = null;
   }
-
+  
   if (processingTimer !== null) {
     clearTimeout(processingTimer);
     processingTimer = null;
@@ -127,7 +129,7 @@ function handleMessage(message: Message): void {
     const settingsMessage = message as SettingsUpdatedMessage;
     settings = settingsMessage.settings;
     console.log('[ParallelTrans] Settings updated:', settings);
-
+    
     // 번역이 활성화되어 있으면 다시 번역
     if (isActive) {
       removeTranslations();
@@ -167,9 +169,9 @@ function setupMutationObserver() {
 function processNewTextNode(textNode: Text): void {
   const nodeKey = textExtractor.getNodeKey(textNode);
   if (translatedTexts.has(nodeKey)) return;
-
+  
   cleanupTranslatedTexts();
-
+  
   const text = textNode.textContent?.trim() || '';
   if (text && text.length >= CONSTANTS.MIN_TEXT_LENGTH && /[a-zA-Z]/.test(text)) {
     const segment: TextNodeSegment = {
@@ -187,7 +189,7 @@ function processNewElement(element: Element): void {
 
   const translatedNodeKeys = new Set(translatedTexts.keys());
   const segments = textExtractor.extractTextNodes(element, translatedNodeKeys);
-
+  
   segments.forEach(segment => {
     cleanupTranslatedTexts();
     processSegment(segment);
@@ -197,12 +199,12 @@ function processNewElement(element: Element): void {
 function processSegment(segment: TextNodeSegment): void {
   const nodeKey = textExtractor.getNodeKey(segment.node);
   if (translatedTexts.has(nodeKey)) return;
-
+  
   const chunkInfos = textExtractor.createChunks(segment);
-
+  
   if (chunkInfos.length > 0) {
     nodeChunksMap.set(segment.node, chunkInfos);
-
+    
     chunkInfos.forEach(chunk => {
       addPendingText(segment.node, chunk.text, segment.text, chunk.startIndex, chunk.endIndex);
     });
@@ -223,10 +225,10 @@ function translatePage() {
   // 각 텍스트 노드의 문장들을 스마트하게 청킹하여 번역 큐에 추가
   segments.forEach(segment => {
     const chunkInfos = textExtractor.createChunks(segment);
-
+    
     if (chunkInfos.length > 0) {
       nodeChunksMap.set(segment.node, chunkInfos);
-
+      
       chunkInfos.forEach(chunk => {
         addPendingText(segment.node, chunk.text, segment.text, chunk.startIndex, chunk.endIndex);
       });
@@ -243,16 +245,16 @@ function cleanupTranslatedTexts(): void {
   if (translatedTexts.size <= CONSTANTS.MAX_TRANSLATED_NODES) {
     return;
   }
-
+  
   // 가장 오래된 항목들 제거 (50% 제거)
   const entries = Array.from(translatedTexts.entries())
     .sort((a, b) => a[1] - b[1]); // timestamp 기준 정렬
-
+  
   const removeCount = Math.floor(entries.length / 2);
   for (let i = 0; i < removeCount; i++) {
     translatedTexts.delete(entries[i][0]);
   }
-
+  
   console.log(`[ParallelTrans] Cleaned up ${removeCount} old translated nodes`);
 }
 
@@ -263,7 +265,7 @@ function addPendingText(node: Text, text: string, originalText: string, startInd
   // 이미 번역된 텍스트 노드는 스킵
   const nodeKey = textExtractor.getNodeKey(node);
   if (translatedTexts.has(nodeKey)) return;
-
+  
   pendingTexts.push({ node, text, originalText, startIndex, endIndex });
 
   // 메모리 누수 방지: 최대 크기 제한
@@ -316,29 +318,31 @@ async function processPendingTexts() {
         });
 
         if (result.success && result.translations) {
-          const processedNodes = new Set<Text>();
-
+          // 번역 결과를 청크 정보에 저장
           batch.forEach((item, idx) => {
-            const translatedText = result.translations?.[idx];
-            if (!translatedText) return;
-
-            const chunks = nodeChunksMap.get(item.node);
-            if (!chunks) return;
-
-            const chunk = chunks.find(c =>
-              c.text === item.text &&
-              c.startIndex === item.startIndex &&
-              c.endIndex === item.endIndex
-            );
-            if (chunk) {
-              chunk.translation = translatedText;
+            if (result.translations?.[idx]) {
+              const chunks = nodeChunksMap.get(item.node);
+              if (chunks) {
+                // 해당 청크 찾아서 번역 결과 저장
+                const chunk = chunks.find(c => 
+                  c.text === item.text && 
+                  c.startIndex === item.startIndex && 
+                  c.endIndex === item.endIndex
+                );
+                if (chunk) {
+                  chunk.translation = result.translations[idx];
+                }
+              }
             }
           });
-
+          
+          // 텍스트 노드별로 모든 청크 번역이 완료되었는지 확인하고 삽입
+          const processedNodes = new Set<Text>();
           batch.forEach((item) => {
-            if (processedNodes.has(item.node)) return;
-            processedNodes.add(item.node);
-            processNodeTranslations(item.node);
+            if (!processedNodes.has(item.node)) {
+              processNodeTranslations(item.node);
+              processedNodes.add(item.node);
+            }
           });
         } else if (result.error) {
           console.warn('[ParallelTrans] Batch error:', result.error);
@@ -355,23 +359,26 @@ async function processPendingTexts() {
 }
 
 // ============== 번역 삽입 ==============
+/**
+ * 텍스트 노드의 모든 청크 번역 처리
+ * 모든 청크가 번역 완료되었을 때만 DOM 조작 수행
+ */
 function processNodeTranslations(textNode: Text): void {
   if (!settings || !textNode.parentElement) return;
-
+  
   const nodeKey = textExtractor.getNodeKey(textNode);
   if (translatedTexts.has(nodeKey)) return;
-
-  // 노드가 여전히 DOM에 존재하는지 확인
-  if (!document.contains(textNode)) {
-    console.warn('[ParallelTrans] Node no longer in DOM, skipping');
-    return;
-  }
-
+  
   const chunks = nodeChunksMap.get(textNode);
   if (!chunks || chunks.length === 0) return;
+  
+  const rendered = translationRenderer.renderTranslation(
+    textNode,
+    chunks,
+    settings.displayMode
+  );
 
-  const success = translationRenderer.renderTranslation(textNode, chunks, settings.displayMode);
-  if (!success) {
+  if (!rendered) {
     return;
   }
 
@@ -381,7 +388,7 @@ function processNodeTranslations(textNode: Text): void {
 
 function removeTranslations(): void {
   translationRenderer.removeTranslations();
-
+  
   // 추적 정보 초기화
   translatedTexts.clear();
   nodeChunksMap.clear();

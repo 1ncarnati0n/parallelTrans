@@ -16,3 +16,9 @@
 .parallel-trans-wrapper:hover {
   background-color: rgba(0, 102, 204, 0.1);
 }
+
+.parallel-trans-block {
+  background-color: rgba(0, 102, 204, 0.08);
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
