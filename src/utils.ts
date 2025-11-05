@@ -19,12 +19,18 @@ export const Logger = {
 };
 
 // ============== 캐시 ==============
-import { CacheEntry, CacheStats } from './types';
+import { CacheEntry, CacheStats, TranslationEngine, CONSTANTS } from './types';
 
+/**
+ * LRU 캐시 구현
+ * - 최대 크기 제한
+ * - TTL 지원
+ * - LRU eviction 전략
+ */
 export class TranslationCache {
   private cache = new Map<string, CacheEntry>();
-  private maxSize = 2000;
-  private maxAge = 60 * 60 * 1000; // 1시간
+  private maxSize = CONSTANTS.CACHE_MAX_SIZE;
+  private maxAge = CONSTANTS.CACHE_TTL_MS;
   private stats = { totalRequests: 0, cachedRequests: 0 };
 
   private getCacheKey(text: string, sourceLang: string, targetLang: string): string {
@@ -38,18 +44,24 @@ export class TranslationCache {
 
     if (!entry) return null;
 
+    // TTL 체크
     if (Date.now() - entry.timestamp > this.maxAge) {
       this.cache.delete(key);
       return null;
     }
 
+    // LRU: 최근 사용 항목으로 이동
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+
     this.stats.cachedRequests++;
     return entry;
   }
 
-  async set(text: string, translation: string, sourceLang: string, targetLang: string, engine: any): Promise<void> {
+  async set(text: string, translation: string, sourceLang: string, targetLang: string, engine: TranslationEngine): Promise<void> {
     const key = this.getCacheKey(text, sourceLang, targetLang);
 
+    // LRU eviction: 가장 오래된 항목 제거
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
       if (firstKey) this.cache.delete(firstKey);
@@ -60,6 +72,7 @@ export class TranslationCache {
 
   async clear(): Promise<void> {
     this.cache.clear();
+    this.stats = { totalRequests: 0, cachedRequests: 0 };
   }
 
   getStats(): CacheStats {
@@ -77,15 +90,17 @@ export class TranslationCache {
 }
 
 // ============== 레이트 제한 ==============
+/**
+ * API 호출 속도 제한
+ * - DeepL Free: 50만 자/월, 약 50 requests/분
+ * - Microsoft: 1초당 100 요청
+ */
 export class RateLimiter {
-  // 요청 큐 및 타이밍 추적
   private lastRequestTime = { deepl: 0, microsoft: 0 };
-  private requestQueue = { deepl: 0, microsoft: 0 };
-
-  // API 제한
-  // DeepL Free: 50만 자/월, 약 50 requests/분
-  // Microsoft: 1초당 100 요청 (약 1000 TPS)
-  private minInterval = { deepl: 1200, microsoft: 100 }; // ms 단위 최소 간격
+  private minInterval = {
+    deepl: CONSTANTS.RATE_LIMIT_DEEPL,
+    microsoft: CONSTANTS.RATE_LIMIT_MICROSOFT
+  };
 
   async waitForSlot(engine: 'deepl' | 'microsoft'): Promise<void> {
     const now = Date.now();
@@ -94,26 +109,22 @@ export class RateLimiter {
     const minInterval = this.minInterval[engine];
 
     if (timeSinceLastRequest < minInterval) {
-      // 최소 간격 미달 시 대기
       const waitTime = minInterval - timeSinceLastRequest;
-      console.log(`[RateLimiter] ${engine} 대기: ${waitTime}ms`);
+      Logger.debug('RateLimiter', `${engine} 대기: ${waitTime}ms`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
 
     this.lastRequestTime[engine] = Date.now();
   }
 
-  // 배치 요청의 경우 추가 체크 (문자 수 기반)
   async waitForBatch(engine: 'deepl' | 'microsoft', totalChars: number): Promise<void> {
-    // 먼저 기본 레이트 제한 적용
     await this.waitForSlot(engine);
 
     // Microsoft의 경우 추가 제한 (1초당 100K 문자)
     if (engine === 'microsoft' && totalChars > 1000) {
-      // 너무 큰 배치는 추가 대기
       const extraWait = Math.max(0, totalChars / 10000 * 100);
       if (extraWait > 0) {
-        console.log(`[RateLimiter] Microsoft 배치 크기로 인한 추가 대기: ${extraWait}ms`);
+        Logger.debug('RateLimiter', `Microsoft 배치 크기로 인한 추가 대기: ${extraWait}ms`);
         await new Promise(resolve => setTimeout(resolve, extraWait));
       }
     }

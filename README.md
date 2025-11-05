@@ -27,7 +27,19 @@
 npm install
 ```
 
-### 2. 빌드
+### 2. API 키 설정 (선택사항)
+```bash
+# .env.example을 .env로 복사
+cp .env.example .env
+
+# .env 파일을 편집하여 API 키 입력
+# DEEPL_API_KEY=your_deepl_api_key_here
+# AZURE_TRANSLATION_KEY=your_azure_translation_key_here
+```
+
+**중요**: .env 파일은 Git에 커밋되지 않습니다. API 키는 확장프로그램 팝업 설정에서도 입력할 수 있습니다.
+
+### 3. 빌드
 ```bash
 # 프로덕션 빌드
 npm run build

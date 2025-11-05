@@ -2,14 +2,16 @@
  * Content Script
  */
 
-import { Settings, BatchTranslationRequest } from './types';
+import { Settings, BatchTranslationRequest, CONSTANTS } from './types';
 
 let settings: Settings | null = null;
 let isActive = false;
+let isProcessing = false; // Race condition 방지
 const translatedNodes = new WeakSet<Node>();
 const pendingTexts: { node: Node; text: string }[] = [];
 let mutationObserver: MutationObserver | null = null;
 let processingTimer: number | null = null;
+
 
 // ============== 초기화 ==============
 function initSettings() {
@@ -25,7 +27,7 @@ function initSettings() {
     primaryEngine: 'deepl',
     fallbackEngine: 'microsoft',
     displayMode: 'parallel',
-    batchSize: 10,
+    batchSize: CONSTANTS.DEFAULT_BATCH_SIZE,
     cacheEnabled: true,
     viewportTranslation: true,
   };
@@ -145,8 +147,8 @@ function setupMutationObserver() {
         Array.from(mutation.addedNodes).forEach((node) => {
           if (node.nodeType === Node.TEXT_NODE) {
             const text = node.textContent?.trim();
-            if (text && text.length >= 3 && /[a-zA-Z]/.test(text)) {
-              pendingTexts.push({ node, text });
+            if (text && text.length >= CONSTANTS.MIN_TEXT_LENGTH && /[a-zA-Z]/.test(text)) {
+              addPendingText(node, text);
             }
           }
         });
@@ -174,12 +176,28 @@ function translatePage() {
   const textNodes = getTextNodes(document.body);
   console.log(`[ParallelTrans] Found ${textNodes.length} nodes`);
 
-  pendingTexts.push(...textNodes.map(node => ({
-    node,
-    text: node.textContent?.trim() || '',
-  })));
+  textNodes.forEach(node => {
+    const text = node.textContent?.trim() || '';
+    if (text) {
+      addPendingText(node, text);
+    }
+  });
 
   scheduleProcessing();
+}
+
+/**
+ * pendingTexts에 항목 추가 (메모리 누수 방지)
+ */
+function addPendingText(node: Node, text: string) {
+  pendingTexts.push({ node, text });
+
+  // 메모리 누수 방지: 최대 크기 제한
+  if (pendingTexts.length > CONSTANTS.MAX_PENDING_TEXTS) {
+    const removeCount = pendingTexts.length - CONSTANTS.MAX_PENDING_TEXTS;
+    pendingTexts.splice(0, removeCount);
+    console.warn(`[ParallelTrans] Pending texts overflow, removed ${removeCount} oldest items`);
+  }
 }
 
 function scheduleProcessing() {
@@ -188,42 +206,59 @@ function scheduleProcessing() {
   processingTimer = window.setTimeout(async () => {
     processingTimer = null;
     await processPendingTexts();
-  }, 100);
+  }, CONSTANTS.BATCH_PROCESSING_DELAY_MS);
 }
 
+/**
+ * Race condition 방지를 위한 처리
+ */
 async function processPendingTexts() {
   if (!settings) {
     console.warn('[ParallelTrans] Settings not ready for processing');
     return;
   }
 
-  while (pendingTexts.length > 0) {
-    const batch = pendingTexts.splice(0, settings.batchSize);
-    const texts = batch.map(b => b.text);
+  // Race condition 방지
+  if (isProcessing) {
+    console.log('[ParallelTrans] Already processing, skipping');
+    return;
+  }
 
-    try {
-      const result = await chrome.runtime.sendMessage({
-        type: 'batchTranslate',
-        data: {
-          texts,
-          sourceLang: settings.sourceLang,
-          targetLang: settings.targetLang,
-        } as BatchTranslationRequest,
-      });
+  isProcessing = true;
 
-      if (result.success && result.translations) {
-        batch.forEach((item, idx) => {
-          if (result.translations?.[idx]) {
-            insertTranslation(item.node, result.translations[idx]);
-            translatedNodes.add(item.node);
-          }
+  try {
+    while (pendingTexts.length > 0) {
+      const batch = pendingTexts.splice(0, settings.batchSize);
+      const texts = batch.map(b => b.text);
+
+      try {
+        const result = await chrome.runtime.sendMessage({
+          type: 'batchTranslate',
+          data: {
+            texts,
+            sourceLang: settings.sourceLang,
+            targetLang: settings.targetLang,
+          } as BatchTranslationRequest,
         });
-      }
-    } catch (error) {
-      console.warn('[ParallelTrans] Batch error:', error);
-    }
 
-    await delay(50);
+        if (result.success && result.translations) {
+          batch.forEach((item, idx) => {
+            if (result.translations?.[idx]) {
+              insertTranslation(item.node, result.translations[idx]);
+              translatedNodes.add(item.node);
+            }
+          });
+        } else if (result.error) {
+          console.warn('[ParallelTrans] Batch error:', result.error);
+        }
+      } catch (error) {
+        console.warn('[ParallelTrans] Batch error:', error);
+      }
+
+      await delay(CONSTANTS.BATCH_INTERVAL_DELAY_MS);
+    }
+  } finally {
+    isProcessing = false;
   }
 }
 
@@ -231,7 +266,6 @@ async function processPendingTexts() {
 function getTextNodes(root: Node): Node[] {
   const nodes: Node[] = [];
   const excluded = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'IFRAME'];
-  // 스타일만 변경하는 요소들 (무시해도 됨)
   const inlineFormatting = ['STRONG', 'EM', 'B', 'I', 'U', 'MARK', 'SMALL', 'SUP', 'SUB', 'SPAN'];
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
@@ -243,14 +277,13 @@ function getTextNodes(root: Node): Node[] {
         return NodeFilter.FILTER_REJECT;
       }
 
-      // 블록 요소 (p, h1-h6, div, li 등)인 경우 - 이들의 전체 텍스트를 번역
+      // 블록 요소
       const blockElements = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION'];
       if (blockElements.includes(element.tagName)) {
-        // 블록 요소는 번역 대상으로 수락
         return NodeFilter.FILTER_ACCEPT;
       }
 
-      // 인라인 포맷팅 요소는 건너뛰기 (부모에서 이미 처리됨)
+      // 인라인 포맷팅 요소는 건너뛰기
       if (inlineFormatting.includes(element.tagName)) {
         return NodeFilter.FILTER_SKIP;
       }
@@ -260,7 +293,6 @@ function getTextNodes(root: Node): Node[] {
         return NodeFilter.FILTER_SKIP;
       }
 
-      // 텍스트만 있는 요소 수락
       return NodeFilter.FILTER_ACCEPT;
     },
   });
@@ -270,8 +302,8 @@ function getTextNodes(root: Node): Node[] {
     const element = node as Element;
     const text = element.textContent?.trim() || '';
 
-    // 유효한 텍스트만 추가 (최소 3글자 이상, 영문 포함)
-    if (text.length >= 3 && /[a-zA-Z]/.test(text)) {
+    // 유효한 텍스트만 추가
+    if (text.length >= CONSTANTS.MIN_TEXT_LENGTH && /[a-zA-Z]/.test(text)) {
       nodes.push(element);
     }
   }
