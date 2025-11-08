@@ -94,8 +94,15 @@ function cleanup() {
 
 // ============== 단축키 ==============
 function handleKeydown(e: KeyboardEvent) {
+  const isAltOnly = e.altKey && !e.metaKey && !e.ctrlKey;
+  const key = (e.key || '').toLowerCase();
+  const code = e.code || '';
+
   // Option+A (Mac: altKey, Windows: altKey) - Cmd는 제외
-  if (e.altKey && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 'a') {
+  if (
+    isAltOnly &&
+    (code === 'KeyA' || key === 'a' || key === 'ㅁ')
+  ) {
     e.preventDefault();
     isActive = !isActive;
     const message = isActive ? '✅ 번역 ON' : '❌ 번역 OFF';
@@ -110,7 +117,10 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   // Option+Q (Mac: altKey, Windows: altKey) - 표시 모드 전환
-  if (e.altKey && !e.metaKey && !e.ctrlKey && e.key.toLowerCase() === 'q') {
+  if (
+    isAltOnly &&
+    (code === 'KeyQ' || key === 'q' || key === 'ㅂ')
+  ) {
     if (!settings) return;
     e.preventDefault();
     settings.displayMode = settings.displayMode === 'parallel' ? 'translation-only' : 'parallel';

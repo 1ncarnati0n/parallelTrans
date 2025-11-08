@@ -147,8 +147,23 @@ export class TextExtractor {
     let current: Element | null = parent;
     while (current && current !== document.body) {
       const tag = current.tagName.toLowerCase();
-      const id = current.id ? `#${current.id}` : '';
-      const className = current.className ? `.${current.className.split(' ')[0]}` : '';
+
+      const rawId = typeof current.getAttribute === 'function'
+        ? current.getAttribute('id')
+        : null;
+      const id = rawId ? `#${rawId}` : '';
+
+      let classToken = '';
+      if (typeof current.getAttribute === 'function') {
+        const rawClass = current.getAttribute('class');
+        if (rawClass) {
+          classToken = rawClass.trim().split(/\s+/)[0] || '';
+        }
+      } else if (typeof (current as HTMLElement).className === 'string') {
+        classToken = (current as HTMLElement).className.trim().split(/\s+/)[0] || '';
+      }
+      const className = classToken ? `.${classToken}` : '';
+
       path.unshift(tag + id + className);
       current = current.parentElement;
     }

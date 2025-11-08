@@ -10,6 +10,7 @@ export class TranslationRenderer {
   private readonly originalTexts = new WeakMap<Text, string>();
   private readonly translatedNodes = new Set<Text>();
   private readonly highlightedBlocks = new Set<Element>();
+  private readonly appendedTranslations = new WeakMap<Text, HTMLSpanElement>();
   private readonly blockTags = new Set<string>(CONSTANTS.BLOCK_ELEMENTS);
 
   /**
@@ -31,9 +32,10 @@ export class TranslationRenderer {
     const translatedText = this.buildTranslatedText(chunks);
 
     if (displayMode === 'parallel') {
-      const combined = translatedText ? `${originalText} [${translatedText}]` : originalText;
-      textNode.textContent = combined;
+      textNode.textContent = originalText;
+      this.upsertParallelTranslation(textNode, translatedText);
     } else {
+      this.removeParallelTranslation(textNode);
       textNode.textContent = translatedText || originalText;
     }
 
@@ -57,6 +59,7 @@ export class TranslationRenderer {
       if (original !== undefined && node.isConnected) {
         node.textContent = original;
       }
+      this.removeParallelTranslation(node);
     });
     this.translatedNodes.clear();
 
@@ -88,6 +91,46 @@ export class TranslationRenderer {
       current = current.parentElement;
     }
     return textNode.parentElement;
+  }
+
+  private upsertParallelTranslation(textNode: Text, translatedText: string): void {
+    const existing = this.appendedTranslations.get(textNode);
+
+    if (!translatedText) {
+      if (existing) {
+        existing.remove();
+        this.appendedTranslations.delete(textNode);
+      }
+      return;
+    }
+
+    if (existing) {
+      existing.textContent = `[${translatedText}]`;
+      return;
+    }
+
+    const span = document.createElement('span');
+    span.className = 'parallel-trans-inline';
+    span.textContent = `[${translatedText}]`;
+
+    const parent = textNode.parentNode;
+    if (!parent) return;
+
+    if (textNode.nextSibling) {
+      parent.insertBefore(span, textNode.nextSibling);
+    } else {
+      parent.appendChild(span);
+    }
+
+    this.appendedTranslations.set(textNode, span);
+  }
+
+  private removeParallelTranslation(textNode: Text): void {
+    const span = this.appendedTranslations.get(textNode);
+    if (span) {
+      span.remove();
+      this.appendedTranslations.delete(textNode);
+    }
   }
 }
 
