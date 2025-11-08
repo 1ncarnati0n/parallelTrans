@@ -22,6 +22,9 @@ export const CONSTANTS = {
   BATCH_PROCESSING_DELAY_MS: 50,
   BATCH_INTERVAL_DELAY_MS: 30,
 
+  // Hydration grace period
+  HYDRATION_GRACE_PERIOD_MS: 1200,
+
   // 텍스트 청킹
   MAX_CHUNK_LENGTH: 500,
   MAX_CHUNK_SENTENCES: 5,

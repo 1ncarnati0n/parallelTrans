@@ -112,6 +112,7 @@ export class TranslationRenderer {
     const span = document.createElement('span');
     span.className = 'parallel-trans-inline';
     span.textContent = `[${translatedText}]`;
+    span.dataset.parallelTrans = 'inline';
 
     const parent = textNode.parentNode;
     if (!parent) return;

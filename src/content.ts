@@ -27,6 +27,19 @@ let processingTimer: number | null = null;
 const textExtractor = new TextExtractor();
 const translationRenderer = new TranslationRenderer();
 const styleManager = new StyleManager();
+let hydrationSettled = false;
+let hydrationWaitPromise: Promise<void> | null = null;
+
+const HYDRATION_SELECTOR_LIST = [
+  '[data-reactroot]',
+  '[data-reactid]',
+  '[data-nextjs-scroll-state]',
+  '[data-nextjs-router]',
+  '[data-sveltekit-hydrate]',
+  '[data-v-app]',
+  '[data-solidroot]',
+  '[ng-version]',
+];
 
 // ============== 초기화 ==============
 async function initSettings(): Promise<void> {
@@ -110,7 +123,7 @@ function handleKeydown(e: KeyboardEvent) {
     console.log(`[ParallelTrans] ${message}`);
 
     if (isActive) {
-      translatePage();
+      void activateTranslations();
     } else {
       removeTranslations();
     }
@@ -127,7 +140,7 @@ function handleKeydown(e: KeyboardEvent) {
     const mode = settings.displayMode === 'parallel' ? '병렬 표기' : '번역만';
     styleManager.showToast(`📝 모드: ${mode}`);
     removeTranslations();
-    if (isActive) translatePage();
+    if (isActive) void activateTranslations();
   }
 }
 
@@ -149,6 +162,7 @@ function handleMessage(message: Message): void {
 // ============== Mutation Observer ==============
 function setupMutationObserver() {
   mutationObserver = new MutationObserver((mutations) => {
+    if (!hydrationSettled) return;
     if (!isActive) return;
 
     for (const mutation of mutations) {
@@ -175,6 +189,7 @@ function setupMutationObserver() {
 }
 
 function processNewTextNode(textNode: Text): void {
+  if (!hydrationSettled) return;
   const nodeKey = textExtractor.getNodeKey(textNode);
   if (translatedTexts.has(nodeKey)) return;
 
@@ -192,6 +207,7 @@ function processNewTextNode(textNode: Text): void {
 }
 
 function processNewElement(element: Element): void {
+  if (!hydrationSettled) return;
   const excludedTags = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'IFRAME'];
   if (excludedTags.includes(element.tagName)) return;
 
@@ -221,6 +237,9 @@ function processSegment(segment: TextNodeSegment): void {
 
 // ============== 페이지 번역 ==============
 function translatePage() {
+  if (!hydrationSettled) {
+    return;
+  }
   if (!settings) {
     console.warn('[ParallelTrans] Settings not ready');
     return;
@@ -285,6 +304,7 @@ function addPendingText(node: Text, text: string, originalText: string, startInd
 }
 
 function scheduleProcessing() {
+  if (!hydrationSettled) return;
   if (processingTimer !== null) return;
 
   processingTimer = window.setTimeout(async () => {
@@ -297,6 +317,7 @@ function scheduleProcessing() {
  * Race condition 방지를 위한 처리
  */
 async function processPendingTexts() {
+  if (!hydrationSettled) return;
   if (!settings) {
     console.warn('[ParallelTrans] Settings not ready for processing');
     return;
@@ -366,6 +387,7 @@ async function processPendingTexts() {
 
 // ============== 번역 삽입 ==============
 function processNodeTranslations(textNode: Text): void {
+  if (!hydrationSettled) return;
   if (!settings || !textNode.parentElement) return;
 
   const nodeKey = textExtractor.getNodeKey(textNode);
@@ -396,6 +418,40 @@ function removeTranslations(): void {
   translatedTexts.clear();
   nodeChunksMap.clear();
   pendingTexts.length = 0;
+}
+
+async function activateTranslations(): Promise<void> {
+  await ensureHydrationSettled();
+  translatePage();
+}
+
+function pageLikelyHydrating(): boolean {
+  return HYDRATION_SELECTOR_LIST.some((selector) => document.querySelector(selector));
+}
+
+async function ensureHydrationSettled(): Promise<void> {
+  if (hydrationSettled) return;
+
+  if (!pageLikelyHydrating()) {
+    hydrationSettled = true;
+    return;
+  }
+
+  if (!hydrationWaitPromise) {
+    hydrationWaitPromise = waitForHydrationGrace();
+  }
+
+  await hydrationWaitPromise;
+  hydrationSettled = true;
+}
+
+async function waitForHydrationGrace(): Promise<void> {
+  if (document.readyState !== 'complete') {
+    await new Promise<void>((resolve) => {
+      window.addEventListener('load', () => resolve(), { once: true });
+    });
+  }
+  await delay(CONSTANTS.HYDRATION_GRACE_PERIOD_MS);
 }
 
 // ============== 유틸리티 ==============
