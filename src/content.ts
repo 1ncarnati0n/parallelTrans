@@ -4,9 +4,23 @@
  */
 
 import { Settings, BatchTranslationRequest, CONSTANTS, Message, SettingsUpdatedMessage } from './types';
+import { delay } from './utils';
 import { TextExtractor, TextChunk, TextNodeSegment } from './modules/TextExtractor';
 import { TranslationRenderer } from './modules/TranslationRenderer';
 import { StyleManager } from './modules/StyleManager';
+
+// ============== 타입 정의 ==============
+interface PendingText {
+  node: Text;
+  text: string;
+  originalText: string;
+  startIndex: number;
+  endIndex: number;
+}
+
+interface RetryItem extends PendingText {
+  retryCount: number;
+}
 
 // ============== 상태 관리 ==============
 let settings: Settings | null = null;
@@ -16,9 +30,12 @@ let isProcessing = false; // Race condition 방지
 // 번역된 텍스트 노드 추적 (부모 요소 + 텍스트 내용 기반)
 // LRU 방식으로 메모리 관리
 const translatedTexts = new Map<string, number>(); // key -> timestamp
-const pendingTexts: { node: Text; text: string; originalText: string; startIndex: number; endIndex: number }[] = [];
+const pendingTexts: PendingText[] = [];
 // 텍스트 노드별 청크 그룹화
 const nodeChunksMap = new Map<Text, TextChunk[]>();
+// 재시도 큐
+const retryQueue: RetryItem[] = [];
+let retryTimer: number | null = null;
 
 let mutationObserver: MutationObserver | null = null;
 let processingTimer: number | null = null;
@@ -93,6 +110,7 @@ function cleanup() {
   translatedTexts.clear();
   nodeChunksMap.clear();
   pendingTexts.length = 0;
+  retryQueue.length = 0;
 
   if (mutationObserver) {
     mutationObserver.disconnect();
@@ -102,6 +120,11 @@ function cleanup() {
   if (processingTimer !== null) {
     clearTimeout(processingTimer);
     processingTimer = null;
+  }
+
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
   }
 }
 
@@ -136,8 +159,18 @@ function handleKeydown(e: KeyboardEvent) {
   ) {
     if (!settings) return;
     e.preventDefault();
-    settings.displayMode = settings.displayMode === 'parallel' ? 'translation-only' : 'parallel';
-    const mode = settings.displayMode === 'parallel' ? '병렬 표기' : '번역만';
+    const newDisplayMode = settings.displayMode === 'parallel' ? 'translation-only' : 'parallel';
+    settings.displayMode = newDisplayMode;
+
+    // Background로 설정 저장 요청
+    chrome.runtime.sendMessage({
+      type: 'updateSettings',
+      data: { displayMode: newDisplayMode }
+    } as Message).catch(err => {
+      console.warn('[ParallelTrans] Failed to save displayMode:', err);
+    });
+
+    const mode = newDisplayMode === 'parallel' ? '병렬 표기' : '번역만';
     styleManager.showToast(`📝 모드: ${mode}`);
     removeTranslations();
     if (isActive) void activateTranslations();
@@ -206,10 +239,12 @@ function processNewTextNode(textNode: Text): void {
   }
 }
 
+// 제외 요소 Set (성능 최적화)
+const EXCLUDED_TAGS = new Set<string>(CONSTANTS.EXCLUDED_ELEMENTS);
+
 function processNewElement(element: Element): void {
   if (!hydrationSettled) return;
-  const excludedTags = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'IFRAME'];
-  if (excludedTags.includes(element.tagName)) return;
+  if (EXCLUDED_TAGS.has(element.tagName)) return;
 
   const translatedNodeKeys = new Set(translatedTexts.keys());
   const segments = textExtractor.extractTextNodes(element, translatedNodeKeys);
@@ -373,15 +408,103 @@ async function processPendingTexts() {
           });
         } else if (result.error) {
           console.warn('[ParallelTrans] Batch error:', result.error);
+          // 실패한 배치를 재시도 큐에 추가
+          addToRetryQueue(batch);
         }
       } catch (error) {
         console.warn('[ParallelTrans] Batch error:', error);
+        // 실패한 배치를 재시도 큐에 추가
+        addToRetryQueue(batch);
       }
 
       await delay(CONSTANTS.BATCH_INTERVAL_DELAY_MS);
     }
   } finally {
     isProcessing = false;
+    // 재시도 큐 처리 스케줄링
+    scheduleRetryProcessing();
+  }
+}
+
+/**
+ * 실패한 배치를 재시도 큐에 추가
+ */
+function addToRetryQueue(batch: PendingText[]): void {
+  for (const item of batch) {
+    // 노드가 아직 DOM에 존재하는지 확인
+    if (!document.contains(item.node)) continue;
+
+    // 기존 재시도 항목 찾기
+    const existingIdx = retryQueue.findIndex(
+      r => r.node === item.node && r.text === item.text
+    );
+
+    if (existingIdx >= 0) {
+      // 이미 큐에 있으면 재시도 횟수 증가
+      retryQueue[existingIdx].retryCount++;
+    } else {
+      // 새로운 재시도 항목 추가
+      retryQueue.push({ ...item, retryCount: 1 });
+    }
+  }
+}
+
+/**
+ * 재시도 처리 스케줄링
+ */
+function scheduleRetryProcessing(): void {
+  if (retryQueue.length === 0) return;
+  if (retryTimer !== null) return;
+
+  retryTimer = window.setTimeout(async () => {
+    retryTimer = null;
+    await processRetryQueue();
+  }, CONSTANTS.RETRY_DELAY_MS);
+}
+
+/**
+ * 재시도 큐 처리
+ */
+async function processRetryQueue(): Promise<void> {
+  if (!isActive || !settings) return;
+  if (retryQueue.length === 0) return;
+
+  // 재시도 횟수 초과 항목 필터링 및 제거
+  const toRetry: RetryItem[] = [];
+  const failed: RetryItem[] = [];
+
+  for (const item of retryQueue) {
+    if (item.retryCount >= CONSTANTS.MAX_RETRY_COUNT) {
+      failed.push(item);
+    } else if (document.contains(item.node)) {
+      toRetry.push(item);
+    }
+  }
+
+  // 최종 실패 항목 처리
+  if (failed.length > 0) {
+    console.warn(`[ParallelTrans] ${failed.length}개 텍스트 번역 최종 실패`);
+    styleManager.showToast(`⚠️ ${failed.length}개 번역 실패`);
+  }
+
+  // 재시도 큐 초기화
+  retryQueue.length = 0;
+
+  // 재시도할 항목을 pendingTexts에 추가
+  if (toRetry.length > 0) {
+    console.log(`[ParallelTrans] ${toRetry.length}개 텍스트 재시도`);
+    for (const item of toRetry) {
+      pendingTexts.push({
+        node: item.node,
+        text: item.text,
+        originalText: item.originalText,
+        startIndex: item.startIndex,
+        endIndex: item.endIndex,
+      });
+      // 재시도 카운트 유지를 위해 다시 큐에 추가
+      retryQueue.push(item);
+    }
+    scheduleProcessing();
   }
 }
 
@@ -452,11 +575,6 @@ async function waitForHydrationGrace(): Promise<void> {
     });
   }
   await delay(CONSTANTS.HYDRATION_GRACE_PERIOD_MS);
-}
-
-// ============== 유틸리티 ==============
-function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ============== 실행 ==============

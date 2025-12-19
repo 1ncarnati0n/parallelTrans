@@ -45,6 +45,25 @@ function updateUI(settings: Settings) {
   els.sourceLang.value = settings.sourceLang;
   els.targetLang.value = settings.targetLang;
   els.displayMode.value = settings.displayMode;
+
+  // API 키 미설정 시 안내 표시
+  checkApiKeyStatus(settings);
+}
+
+/**
+ * API 키 설정 상태 확인 및 안내
+ */
+function checkApiKeyStatus(settings: Settings): void {
+  const hasDeepL = Boolean(settings.deeplApiKey?.trim());
+  const hasMicrosoft = Boolean(settings.microsoftApiKey?.trim());
+
+  if (!hasDeepL && !hasMicrosoft) {
+    showStatus('⚠️ API 키를 입력해주세요', 'error');
+  } else if (!hasDeepL && settings.primaryEngine === 'deepl') {
+    showStatus('⚠️ DeepL API 키가 필요합니다', 'error');
+  } else if (!hasMicrosoft && settings.primaryEngine === 'microsoft') {
+    showStatus('⚠️ Microsoft API 키가 필요합니다', 'error');
+  }
 }
 
 // ============== 저장 ==============

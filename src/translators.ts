@@ -2,11 +2,18 @@
  * Translation Engines
  */
 
-import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, ApiError, TranslationEngine } from './types';
+import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, ApiError, TranslationEngine, Settings } from './types';
 import { Logger } from './utils';
 
+// ============== 번역 엔진 인터페이스 ==============
+export interface ITranslationEngine {
+  isConfigured(): boolean;
+  translate(request: TranslationRequest): Promise<TranslationResponse>;
+  translateBatch(request: BatchTranslationRequest): Promise<BatchTranslationResponse>;
+}
+
 // ============== DeepL ==============
-export class DeepL {
+export class DeepL implements ITranslationEngine {
   private apiUrl = 'https://api-free.deepl.com/v2/translate';
   private apiKey: string;
 
@@ -150,7 +157,7 @@ export class DeepL {
 }
 
 // ============== Microsoft ==============
-export class Microsoft {
+export class Microsoft implements ITranslationEngine {
   private apiUrl = 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0';
   private apiKey: string;
   private region: string;
@@ -285,36 +292,37 @@ export class Microsoft {
 
 // ============== 엔진 매니저 ==============
 export class TranslationManager {
-  private deepl: DeepL | null = null;
-  private microsoft: Microsoft | null = null;
+  private engines: Map<TranslationEngine, ITranslationEngine> = new Map();
 
-  configure(settings: any) {
+  configure(settings: Settings): void {
+    this.engines.clear();
+
     if (settings.deeplApiKey) {
-      this.deepl = new DeepL(settings.deeplApiKey);
+      this.engines.set('deepl', new DeepL(settings.deeplApiKey));
     }
     if (settings.microsoftApiKey) {
-      this.microsoft = new Microsoft(settings.microsoftApiKey, settings.microsoftRegion);
+      this.engines.set('microsoft', new Microsoft(settings.microsoftApiKey, settings.microsoftRegion));
     }
   }
 
-  async translate(engine: 'deepl' | 'microsoft', request: TranslationRequest): Promise<TranslationResponse> {
-    const translator = engine === 'deepl' ? this.deepl : this.microsoft;
+  private getEngine(engine: TranslationEngine): ITranslationEngine {
+    const translator = this.engines.get(engine);
     if (!translator || !translator.isConfigured()) {
       throw new Error(`${engine} not configured`);
     }
-    return translator.translate(request);
+    return translator;
   }
 
-  async translateBatch(engine: 'deepl' | 'microsoft', request: BatchTranslationRequest): Promise<BatchTranslationResponse> {
-    const translator = engine === 'deepl' ? this.deepl : this.microsoft;
-    if (!translator || !translator.isConfigured()) {
-      throw new Error(`${engine} not configured`);
-    }
-    return translator.translateBatch(request);
+  async translate(engine: TranslationEngine, request: TranslationRequest): Promise<TranslationResponse> {
+    return this.getEngine(engine).translate(request);
   }
 
-  isConfigured(engine: 'deepl' | 'microsoft'): boolean {
-    const translator = engine === 'deepl' ? this.deepl : this.microsoft;
+  async translateBatch(engine: TranslationEngine, request: BatchTranslationRequest): Promise<BatchTranslationResponse> {
+    return this.getEngine(engine).translateBatch(request);
+  }
+
+  isConfigured(engine: TranslationEngine): boolean {
+    const translator = this.engines.get(engine);
     return translator?.isConfigured() ?? false;
   }
 }

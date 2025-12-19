@@ -54,6 +54,7 @@ export class TranslationRenderer {
    * 번역 표시 제거 및 원문 복원
    */
   removeTranslations(): void {
+    // 추적된 노드 복원
     this.translatedNodes.forEach((node) => {
       const original = this.originalTexts.get(node);
       if (original !== undefined && node.isConnected) {
@@ -63,12 +64,33 @@ export class TranslationRenderer {
     });
     this.translatedNodes.clear();
 
+    // 블록 하이라이트 제거
     this.highlightedBlocks.forEach((block) => {
       if (block.isConnected) {
         block.classList.remove('parallel-trans-block');
       }
     });
     this.highlightedBlocks.clear();
+
+    // 안전망: 추적되지 않은 번역 span도 전체 정리
+    this.cleanupOrphanedTranslations();
+  }
+
+  /**
+   * 추적되지 않은 번역 요소 정리 (안전망)
+   */
+  private cleanupOrphanedTranslations(): void {
+    // data-parallel-trans 속성을 가진 모든 요소 제거
+    const orphanedElements = document.querySelectorAll('[data-parallel-trans]');
+    orphanedElements.forEach(el => el.remove());
+
+    // parallel-trans-inline 클래스를 가진 요소도 정리
+    const inlineElements = document.querySelectorAll('.parallel-trans-inline');
+    inlineElements.forEach(el => el.remove());
+
+    // parallel-trans-block 클래스 제거
+    const blockElements = document.querySelectorAll('.parallel-trans-block');
+    blockElements.forEach(el => el.classList.remove('parallel-trans-block'));
   }
 
   private buildTranslatedText(chunks: TextChunk[]): string {

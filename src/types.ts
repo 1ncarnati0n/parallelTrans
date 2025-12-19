@@ -33,9 +33,13 @@ export const CONSTANTS = {
   RATE_LIMIT_DEEPL: 100,
   RATE_LIMIT_MICROSOFT: 50,
 
-  // API 기본 키 (환경 변수에서 로드)
-  DEFAULT_DEEPL_API_KEY: process.env.DEEPL_API_KEY || '',
-  DEFAULT_MICROSOFT_API_KEY: process.env.AZURE_TRANSLATION_KEY || '',
+  // 재시도 설정
+  MAX_RETRY_COUNT: 3,
+  RETRY_DELAY_MS: 1000,
+
+  // API 기본 키 (사용자가 팝업에서 직접 입력)
+  DEFAULT_DEEPL_API_KEY: '',
+  DEFAULT_MICROSOFT_API_KEY: '',
 
   // 블록 레벨 요소
   BLOCK_ELEMENTS: ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'FIGCAPTION'],

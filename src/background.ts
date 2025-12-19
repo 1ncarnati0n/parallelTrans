@@ -3,15 +3,14 @@
  */
 
 import { TranslationManager } from './translators';
-import { TranslationCache, StorageManager, RateLimiter, Logger } from './utils';
-import { 
-  Message, 
-  TranslationRequest, 
-  BatchTranslationRequest, 
-  Settings, 
-  TranslationEngine, 
-  CONSTANTS,
-  ApiError 
+import { TranslationCache, StorageManager, RateLimiter, Logger, delay, extractErrorMessage } from './utils';
+import {
+  Message,
+  TranslationRequest,
+  BatchTranslationRequest,
+  Settings,
+  TranslationEngine,
+  CONSTANTS
 } from './types';
 
 const manager = new TranslationManager();
@@ -41,8 +40,8 @@ function getDefaultSettings(): Settings {
 
 async function initialize() {
   try {
-    const stored = await storage.get('settings');
-    settings = stored || getDefaultSettings();
+    const stored = await storage.get<Settings>('settings');
+    settings = stored ?? getDefaultSettings();
 
     if (!stored) {
       await storage.set('settings', settings);
@@ -92,10 +91,7 @@ function validateBatchTexts(texts: string[]): { valid: boolean; error?: string }
 chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
   handleMessage(message).then(sendResponse).catch(error => {
     Logger.error('Background', 'Message error', error);
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : (error as ApiError)?.message || 'Unknown error';
-    sendResponse({ success: false, error: errorMessage });
+    sendResponse({ success: false, error: extractErrorMessage(error) });
   });
   return true;
 });
@@ -174,11 +170,10 @@ async function translateWithFallback(
       Logger.debug('Background', `번역 성공: ${engine}`);
       return { success: true, translation: response.translatedText };
     } catch (error: unknown) {
-      const apiError = error as ApiError;
-      const errorMsg = apiError?.message || (error instanceof Error ? error.message : 'Unknown error');
+      const errorMsg = extractErrorMessage(error, 'Translation failed');
 
       if (isLastEngine) {
-        Logger.error('Background', '모든 엔진 실패', apiError);
+        Logger.error('Background', '모든 엔진 실패', error);
         return { success: false, error: `Translation failed: ${errorMsg}` };
       } else {
         Logger.warn('Background', `${engine} 실패 (${errorMsg}), 다음 엔진 시도: ${engines[i + 1]}`);
@@ -216,10 +211,8 @@ async function handleTranslate(request: TranslationRequest) {
     Logger.debug('Background', `Translated (${Date.now() - startTime}ms)`);
     return result;
   } catch (error: unknown) {
-    const apiError = error as ApiError;
-    Logger.error('Background', 'Translation error', apiError);
-    const errorMsg = apiError?.message || (error instanceof Error ? error.message : 'Translation failed');
-    return { success: false, error: errorMsg };
+    Logger.error('Background', 'Translation error', error);
+    return { success: false, error: extractErrorMessage(error, 'Translation failed') };
   }
 }
 
@@ -235,16 +228,25 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
     const results: string[] = new Array(request.texts.length);
     const uncachedTexts: { index: number; text: string }[] = [];
 
-    // 캐시 확인 (엔진 우선순위로 검색)
-    for (let i = 0; i < request.texts.length; i++) {
-      let cached = await cache.get(request.texts[i], request.sourceLang, request.targetLang, settings.primaryEngine);
+    // 캐시 확인 (병렬 조회)
+    const cacheChecks = request.texts.map(async (text, index) => {
+      // Primary 엔진 캐시 먼저 확인
+      let cached = await cache.get(text, request.sourceLang, request.targetLang, settings.primaryEngine);
       if (!cached) {
-        cached = await cache.get(request.texts[i], request.sourceLang, request.targetLang, settings.fallbackEngine);
+        // Fallback 엔진 캐시 확인
+        cached = await cache.get(text, request.sourceLang, request.targetLang, settings.fallbackEngine);
       }
+      return { index, text, cached };
+    });
+
+    const cacheResults = await Promise.all(cacheChecks);
+
+    // 결과 분류
+    for (const { index, text, cached } of cacheResults) {
       if (cached) {
-        results[i] = cached.translation;
+        results[index] = cached.translation;
       } else {
-        uncachedTexts.push({ index: i, text: request.texts[i] });
+        uncachedTexts.push({ index, text });
       }
     }
 
@@ -299,10 +301,8 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
 
     return { success: true, translations: results };
   } catch (error: unknown) {
-    const apiError = error as ApiError;
-    Logger.error('Background', 'Batch translation error', apiError);
-    const errorMsg = apiError?.message || (error instanceof Error ? error.message : 'Batch translation failed');
-    return { success: false, error: errorMsg };
+    Logger.error('Background', 'Batch translation error', error);
+    return { success: false, error: extractErrorMessage(error, 'Batch translation failed') };
   }
 }
 
@@ -332,15 +332,9 @@ async function translateBatchWithEngine(
 
     return true;
   } catch (error: unknown) {
-    const apiError = error as ApiError;
-    Logger.error('Background', `${engine} 배치 번역 실패`, apiError);
+    Logger.error('Background', `${engine} 배치 번역 실패`, error);
     return false;
   }
-}
-
-// ============== 유틸리티 ==============
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ============== 초기화 ==============

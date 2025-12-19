@@ -2,19 +2,40 @@
  * Utility Functions
  */
 
+// ============== 공통 유틸리티 ==============
+export function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 에러 객체에서 메시지 추출
+ */
+export function extractErrorMessage(error: unknown, defaultMessage = 'Unknown error'): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const errObj = error as Record<string, unknown>;
+    if (typeof errObj.message === 'string') {
+      return errObj.message;
+    }
+  }
+  return defaultMessage;
+}
+
 // ============== 로깅 ==============
 export const Logger = {
-  debug: (tag: string, message: string, data?: any) => {
-    console.log(`[${tag}] ${message}`, data || '');
+  debug: (tag: string, message: string, data?: unknown): void => {
+    console.log(`[${tag}] ${message}`, data ?? '');
   },
-  info: (tag: string, message: string, data?: any) => {
-    console.log(`[${tag}] ℹ ${message}`, data || '');
+  info: (tag: string, message: string, data?: unknown): void => {
+    console.log(`[${tag}] ℹ ${message}`, data ?? '');
   },
-  warn: (tag: string, message: string, data?: any) => {
-    console.warn(`[${tag}] ⚠ ${message}`, data || '');
+  warn: (tag: string, message: string, data?: unknown): void => {
+    console.warn(`[${tag}] ⚠ ${message}`, data ?? '');
   },
-  error: (tag: string, message: string, error?: any) => {
-    console.error(`[${tag}] ❌ ${message}`, error || '');
+  error: (tag: string, message: string, error?: unknown): void => {
+    console.error(`[${tag}] ❌ ${message}`, error ?? '');
   },
 };
 
@@ -151,15 +172,15 @@ export class RateLimiter {
 
 // ============== Storage ==============
 export class StorageManager {
-  async get(key: string): Promise<any> {
+  async get<T>(key: string): Promise<T | null> {
     return new Promise(resolve => {
       chrome.storage.sync.get(key, result => {
-        resolve(result[key]);
+        resolve((result[key] as T) ?? null);
       });
     });
   }
 
-  async set(key: string, value: any): Promise<void> {
+  async set<T>(key: string, value: T): Promise<void> {
     return new Promise(resolve => {
       chrome.storage.sync.set({ [key]: value }, resolve);
     });

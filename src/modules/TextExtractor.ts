@@ -5,10 +5,16 @@
 
 import { CONSTANTS } from '../types';
 
+export interface SentenceInfo {
+  text: string;
+  startIndex: number;
+  endIndex: number;
+}
+
 export interface TextNodeSegment {
   node: Text;
   text: string;
-  sentences: string[];
+  sentences: SentenceInfo[];
 }
 
 export interface TextChunk {
@@ -22,7 +28,7 @@ export interface TextChunk {
  * 텍스트 노드 추출 및 처리 클래스
  */
 export class TextExtractor {
-  private readonly excludedTags = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'IFRAME'];
+  private readonly excludedTags = new Set<string>(CONSTANTS.EXCLUDED_ELEMENTS);
   private readonly nodeIds = new WeakMap<Text, string>();
   private nodeIdCounter = 0;
 
@@ -43,7 +49,7 @@ export class TextExtractor {
           if (!parent) return NodeFilter.FILTER_REJECT;
 
           for (let el: Element | null = parent; el; el = el.parentElement) {
-            if (this.excludedTags.includes(el.tagName)) {
+            if (this.excludedTags.has(el.tagName)) {
               return NodeFilter.FILTER_REJECT;
             }
           }
@@ -78,42 +84,60 @@ export class TextExtractor {
   }
 
   /**
-   * 텍스트를 문장 단위로 분할
+   * 텍스트를 문장 단위로 분할 (위치 정보 포함)
    * 문장 구분자: . ! ? 그리고 줄바꿈
    */
-  splitIntoSentences(text: string): string[] {
+  splitIntoSentences(text: string): SentenceInfo[] {
     const sentenceEndRegex = /([.!?]+\s+|[\n\r]+)/g;
-    const sentences: string[] = [];
+    const sentences: SentenceInfo[] = [];
     let lastIndex = 0;
     let match;
 
     while ((match = sentenceEndRegex.exec(text)) !== null) {
-      const sentence = text.substring(lastIndex, match.index + match[1].length).trim();
-      if (sentence.length >= CONSTANTS.MIN_TEXT_LENGTH) {
-        sentences.push(sentence);
+      const endPos = match.index + match[1].length;
+      const sentenceText = text.substring(lastIndex, endPos).trim();
+
+      if (sentenceText.length >= CONSTANTS.MIN_TEXT_LENGTH) {
+        // 원본 텍스트에서 실제 시작 위치 찾기 (trim된 텍스트 기준)
+        const actualStart = text.indexOf(sentenceText, lastIndex);
+        sentences.push({
+          text: sentenceText,
+          startIndex: actualStart >= 0 ? actualStart : lastIndex,
+          endIndex: actualStart >= 0 ? actualStart + sentenceText.length : endPos,
+        });
       }
-      lastIndex = match.index + match[1].length;
+      lastIndex = endPos;
     }
 
-    const lastSentence = text.substring(lastIndex).trim();
-    if (lastSentence.length >= CONSTANTS.MIN_TEXT_LENGTH) {
-      sentences.push(lastSentence);
+    const lastSentenceText = text.substring(lastIndex).trim();
+    if (lastSentenceText.length >= CONSTANTS.MIN_TEXT_LENGTH) {
+      const actualStart = text.indexOf(lastSentenceText, lastIndex);
+      sentences.push({
+        text: lastSentenceText,
+        startIndex: actualStart >= 0 ? actualStart : lastIndex,
+        endIndex: actualStart >= 0 ? actualStart + lastSentenceText.length : text.length,
+      });
     }
 
-    return sentences.length > 0 ? sentences : [text];
+    // 문장이 없으면 전체 텍스트를 하나의 문장으로
+    if (sentences.length === 0) {
+      return [{ text, startIndex: 0, endIndex: text.length }];
+    }
+
+    return sentences;
   }
 
   /**
    * 문장들을 의미 단위로 그룹화 (스마트 청킹)
    * API 제한을 고려하여 적절한 크기로 묶음
    */
-  smartChunking(sentences: string[]): string[][] {
-    const chunks: string[][] = [];
-    let currentChunk: string[] = [];
+  smartChunking(sentences: SentenceInfo[]): SentenceInfo[][] {
+    const chunks: SentenceInfo[][] = [];
+    let currentChunk: SentenceInfo[] = [];
     let currentLength = 0;
 
     for (const sentence of sentences) {
-      const sentenceLength = sentence.length;
+      const sentenceLength = sentence.text.length;
 
       if (
         currentLength + sentenceLength + 1 <= CONSTANTS.MAX_CHUNK_LENGTH &&
@@ -173,23 +197,26 @@ export class TextExtractor {
 
   /**
    * 세그먼트에서 청크 정보 생성
+   * 문장의 위치 정보를 직접 사용하여 정확한 매핑 보장
    */
   createChunks(segment: TextNodeSegment): TextChunk[] {
     const chunks = this.smartChunking(segment.sentences);
     const chunkInfos: TextChunk[] = [];
-    let currentIndex = 0;
 
-    chunks.forEach(chunk => {
-      const chunkText = chunk.join(' ').trim();
+    for (const sentenceGroup of chunks) {
+      if (sentenceGroup.length === 0) continue;
+
+      // 청크 텍스트 생성 (문장들을 공백으로 연결)
+      const chunkText = sentenceGroup.map(s => s.text).join(' ').trim();
+
       if (chunkText && chunkText.length >= CONSTANTS.MIN_TEXT_LENGTH) {
-        const startIndex = segment.text.indexOf(chunkText, currentIndex);
-        if (startIndex !== -1) {
-          const endIndex = startIndex + chunkText.length;
-          chunkInfos.push({ text: chunkText, startIndex, endIndex });
-          currentIndex = endIndex;
-        }
+        // 첫 문장의 시작 위치와 마지막 문장의 끝 위치 사용
+        const startIndex = sentenceGroup[0].startIndex;
+        const endIndex = sentenceGroup[sentenceGroup.length - 1].endIndex;
+
+        chunkInfos.push({ text: chunkText, startIndex, endIndex });
       }
-    });
+    }
 
     return chunkInfos;
   }
