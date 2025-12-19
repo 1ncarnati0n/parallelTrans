@@ -1,16 +1,14 @@
 /* ParallelTrans Content Styles */
 
-.parallel-trans-block {
-  background-color: rgba(0, 102, 204, 0.08);
-  border-radius: 6px;
-  transition: background-color 0.25s ease;
-  padding: 0.15em 0.35em;
-}
+/* 
+ * 배경 하이라이트 제거됨 
+ * .parallel-trans-block 스타일 삭제
+ */
 
 .parallel-trans-inline {
   display: inline;
   margin-left: 0.4em;
-  /* 원본 스타일 상속 */
+  /* 원본 스타일 상속 - 최대한 원문과 비슷하게 */
   font-family: inherit;
   font-size: inherit;
   font-weight: inherit;
@@ -19,6 +17,10 @@
   letter-spacing: inherit;
   line-height: inherit;
   text-decoration: inherit;
-  /* 번역임을 구분하기 위한 최소 스타일 */
-  opacity: 0.85;
+  /* 투명도 제거 */
+  opacity: 1;
+}
+
+.parallel-trans-wrapper {
+  display: inline;
 }

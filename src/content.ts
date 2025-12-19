@@ -229,7 +229,8 @@ function processNewTextNode(textNode: Text): void {
   cleanupTranslatedTexts();
 
   const text = textNode.textContent?.trim() || '';
-  if (text && text.length >= CONSTANTS.MIN_TEXT_LENGTH && /[a-zA-Z]/.test(text)) {
+  // 유니코드 문자 클래스 사용 (다국어 지원)
+  if (text && text.length >= CONSTANTS.MIN_TEXT_LENGTH && /\p{L}/u.test(text)) {
     const segment: TextNodeSegment = {
       node: textNode,
       text,
@@ -388,6 +389,14 @@ async function processPendingTexts() {
             const translatedText = result.translations?.[idx];
             if (!translatedText) return;
 
+            // 번역 성공 시 retryQueue에서 해당 항목 제거
+            const retryIdx = retryQueue.findIndex(
+              r => r.node === item.node && r.text === item.text
+            );
+            if (retryIdx >= 0) {
+              retryQueue.splice(retryIdx, 1);
+            }
+
             const chunks = nodeChunksMap.get(item.node);
             if (!chunks) return;
 
@@ -440,8 +449,8 @@ function addToRetryQueue(batch: PendingText[]): void {
     );
 
     if (existingIdx >= 0) {
-      // 이미 큐에 있으면 재시도 횟수 증가
-      retryQueue[existingIdx].retryCount++;
+      // 이미 큐에 있으면 기존 카운트 유지 (processRetryQueue에서 증가됨)
+      continue;
     } else {
       // 새로운 재시도 항목 추가
       retryQueue.push({ ...item, retryCount: 1 });
@@ -477,7 +486,8 @@ async function processRetryQueue(): Promise<void> {
     if (item.retryCount >= CONSTANTS.MAX_RETRY_COUNT) {
       failed.push(item);
     } else if (document.contains(item.node)) {
-      toRetry.push(item);
+      // 재시도 전에 카운트 증가
+      toRetry.push({ ...item, retryCount: item.retryCount + 1 });
     }
   }
 
@@ -492,7 +502,7 @@ async function processRetryQueue(): Promise<void> {
 
   // 재시도할 항목을 pendingTexts에 추가
   if (toRetry.length > 0) {
-    console.log(`[ParallelTrans] ${toRetry.length}개 텍스트 재시도`);
+    console.log(`[ParallelTrans] ${toRetry.length}개 텍스트 재시도 (${toRetry[0].retryCount}/${CONSTANTS.MAX_RETRY_COUNT}회)`);
     for (const item of toRetry) {
       pendingTexts.push({
         node: item.node,
@@ -501,7 +511,7 @@ async function processRetryQueue(): Promise<void> {
         startIndex: item.startIndex,
         endIndex: item.endIndex,
       });
-      // 재시도 카운트 유지를 위해 다시 큐에 추가
+      // 재시도 카운트 유지를 위해 다시 큐에 추가 (증가된 카운트 반영)
       retryQueue.push(item);
     }
     scheduleProcessing();
@@ -525,7 +535,7 @@ function processNodeTranslations(textNode: Text): void {
   const chunks = nodeChunksMap.get(textNode);
   if (!chunks || chunks.length === 0) return;
 
-  const success = translationRenderer.renderTranslation(textNode, chunks, settings.displayMode);
+  const success = translationRenderer.renderTranslation(textNode, chunks, settings.displayMode, settings.targetLang);
   if (!success) {
     return;
   }

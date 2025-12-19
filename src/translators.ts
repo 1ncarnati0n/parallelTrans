@@ -14,11 +14,14 @@ export interface ITranslationEngine {
 
 // ============== DeepL ==============
 export class DeepL implements ITranslationEngine {
-  private apiUrl = 'https://api-free.deepl.com/v2/translate';
+  private apiUrl: string;
   private apiKey: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, isFree: boolean = true) {
     this.apiKey = apiKey;
+    this.apiUrl = isFree
+      ? 'https://api-free.deepl.com/v2/translate'
+      : 'https://api.deepl.com/v2/translate';
   }
 
   isConfigured(): boolean {
@@ -298,7 +301,7 @@ export class TranslationManager {
     this.engines.clear();
 
     if (settings.deeplApiKey) {
-      this.engines.set('deepl', new DeepL(settings.deeplApiKey));
+      this.engines.set('deepl', new DeepL(settings.deeplApiKey, settings.deeplIsFree));
     }
     if (settings.microsoftApiKey) {
       this.engines.set('microsoft', new Microsoft(settings.microsoftApiKey, settings.microsoftRegion));

@@ -175,14 +175,26 @@ export class StorageManager {
   async get<T>(key: string): Promise<T | null> {
     return new Promise(resolve => {
       chrome.storage.sync.get(key, result => {
-        resolve((result[key] as T) ?? null);
+        if (chrome.runtime.lastError) {
+          Logger.error('Storage', `Get failed: ${chrome.runtime.lastError.message}`);
+          resolve(null);
+        } else {
+          resolve((result[key] as T) ?? null);
+        }
       });
     });
   }
 
-  async set<T>(key: string, value: T): Promise<void> {
+  async set<T>(key: string, value: T): Promise<boolean> {
     return new Promise(resolve => {
-      chrome.storage.sync.set({ [key]: value }, resolve);
+      chrome.storage.sync.set({ [key]: value }, () => {
+        if (chrome.runtime.lastError) {
+          Logger.error('Storage', `Set failed: ${chrome.runtime.lastError.message}`);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
     });
   }
 }

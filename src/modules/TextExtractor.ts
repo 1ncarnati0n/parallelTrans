@@ -55,7 +55,8 @@ export class TextExtractor {
           }
 
           const textContent = textNode.textContent?.trim() || '';
-          if (textContent.length >= CONSTANTS.MIN_TEXT_LENGTH && /[a-zA-Z]/.test(textContent)) {
+          // 유니코드 문자 클래스를 사용하여 모든 언어의 문자 감지
+          if (textContent.length >= CONSTANTS.MIN_TEXT_LENGTH && /\p{L}/u.test(textContent)) {
             return NodeFilter.FILTER_ACCEPT;
           }
 
@@ -85,10 +86,45 @@ export class TextExtractor {
 
   /**
    * 텍스트를 문장 단위로 분할 (위치 정보 포함)
-   * 문장 구분자: . ! ? 그리고 줄바꿈
+   * Intl.Segmenter 사용 (Chrome 87+)
    */
   splitIntoSentences(text: string): SentenceInfo[] {
-    const sentenceEndRegex = /([.!?]+\s+|[\n\r]+)/g;
+    // 1. Intl.Segmenter 사용 시도 (정확도 높음)
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      try {
+        const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' });
+        const segments = Array.from(segmenter.segment(text)) as Intl.SegmentData[];
+        const sentences: SentenceInfo[] = [];
+
+        for (const segment of segments) {
+          const rawText = segment.segment;
+          const trimmedText = rawText.trim();
+
+          if (trimmedText.length >= CONSTANTS.MIN_TEXT_LENGTH) {
+            // trim된 텍스트의 실제 시작 위치 계산
+            const leadingSpaceCount = rawText.indexOf(trimmedText);
+            const startIndex = segment.index + leadingSpaceCount;
+            const endIndex = startIndex + trimmedText.length;
+
+            sentences.push({
+              text: trimmedText,
+              startIndex,
+              endIndex,
+            });
+          }
+        }
+
+        if (sentences.length > 0) {
+          return sentences;
+        }
+      } catch (e) {
+        console.warn('[TextExtractor] Intl.Segmenter failed, falling back to regex', e);
+      }
+    }
+
+    // 2. Fallback: 정규식 기반 분할 (CJK 문장 부호 추가)
+    // 문장 구분자: . ! ? 。 ？！ 및 줄바꿈
+    const sentenceEndRegex = /([.!?。？！]+[\s\n\r]+|[\n\r]+)/g;
     const sentences: SentenceInfo[] = [];
     let lastIndex = 0;
     let match;
@@ -98,7 +134,7 @@ export class TextExtractor {
       const sentenceText = text.substring(lastIndex, endPos).trim();
 
       if (sentenceText.length >= CONSTANTS.MIN_TEXT_LENGTH) {
-        // 원본 텍스트에서 실제 시작 위치 찾기 (trim된 텍스트 기준)
+        // 원본 텍스트에서 실제 시작 위치 찾기
         const actualStart = text.indexOf(sentenceText, lastIndex);
         sentences.push({
           text: sentenceText,

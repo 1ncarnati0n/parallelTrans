@@ -9,17 +9,16 @@ import { TextChunk } from './TextExtractor';
 export class TranslationRenderer {
   private readonly originalTexts = new WeakMap<Text, string>();
   private readonly translatedNodes = new Set<Text>();
-  private readonly highlightedBlocks = new Set<Element>();
   private readonly appendedTranslations = new WeakMap<Text, HTMLSpanElement>();
-  private readonly blockTags = new Set<string>(CONSTANTS.BLOCK_ELEMENTS);
 
   /**
    * 텍스트 노드에 번역 결과를 적용
    */
-  renderTranslation(textNode: Text, chunks: TextChunk[], displayMode: DisplayMode): boolean {
+  renderTranslation(textNode: Text, chunks: TextChunk[], displayMode: DisplayMode, targetLang: string): boolean {
     const parent = textNode.parentElement;
     if (!parent) return false;
-    if (!document.contains(textNode)) return false;
+    // textNode가 document 내에 있거나, 이미 wrapper 안에 있는 경우(isConnected)
+    if (!textNode.isConnected) return false;
 
     const allTranslated = chunks.every(chunk => typeof chunk.translation === 'string');
     if (!allTranslated) return false;
@@ -33,19 +32,13 @@ export class TranslationRenderer {
 
     if (displayMode === 'parallel') {
       textNode.textContent = originalText;
-      this.upsertParallelTranslation(textNode, translatedText);
+      this.upsertParallelTranslation(textNode, translatedText, targetLang);
     } else {
       this.removeParallelTranslation(textNode);
       textNode.textContent = translatedText || originalText;
     }
 
     this.translatedNodes.add(textNode);
-
-    const block = this.findBlockElement(textNode);
-    if (block && !this.highlightedBlocks.has(block)) {
-      block.classList.add('parallel-trans-block');
-      this.highlightedBlocks.add(block);
-    }
 
     return true;
   }
@@ -57,22 +50,14 @@ export class TranslationRenderer {
     // 추적된 노드 복원
     this.translatedNodes.forEach((node) => {
       const original = this.originalTexts.get(node);
-      if (original !== undefined && node.isConnected) {
+      if (original !== undefined) {
         node.textContent = original;
       }
       this.removeParallelTranslation(node);
     });
     this.translatedNodes.clear();
 
-    // 블록 하이라이트 제거
-    this.highlightedBlocks.forEach((block) => {
-      if (block.isConnected) {
-        block.classList.remove('parallel-trans-block');
-      }
-    });
-    this.highlightedBlocks.clear();
-
-    // 안전망: 추적되지 않은 번역 span도 전체 정리
+    // 안전망: 추적되지 않은 번역 요소 전체 정리
     this.cleanupOrphanedTranslations();
   }
 
@@ -80,17 +65,28 @@ export class TranslationRenderer {
    * 추적되지 않은 번역 요소 정리 (안전망)
    */
   private cleanupOrphanedTranslations(): void {
-    // data-parallel-trans 속성을 가진 모든 요소 제거
-    const orphanedElements = document.querySelectorAll('[data-parallel-trans]');
-    orphanedElements.forEach(el => el.remove());
+    // wrapper 요소 정리
+    const wrappers = document.querySelectorAll('.parallel-trans-wrapper');
+    wrappers.forEach(wrapper => {
+      // 텍스트 노드만 남기고 wrapper 제거
+      const parent = wrapper.parentNode;
+      if (parent) {
+        while (wrapper.firstChild) {
+          // 번역 span은 제거하고 텍스트 노드 등은 부모로 이동
+          const child = wrapper.firstChild;
+          if (child instanceof HTMLElement && child.classList.contains('parallel-trans-inline')) {
+            child.remove();
+          } else {
+            parent.insertBefore(child, wrapper);
+          }
+        }
+        wrapper.remove();
+      }
+    });
 
-    // parallel-trans-inline 클래스를 가진 요소도 정리
-    const inlineElements = document.querySelectorAll('.parallel-trans-inline');
-    inlineElements.forEach(el => el.remove());
-
-    // parallel-trans-block 클래스 제거
-    const blockElements = document.querySelectorAll('.parallel-trans-block');
-    blockElements.forEach(el => el.classList.remove('parallel-trans-block'));
+    // 남은 번역 span 제거
+    const orphans = document.querySelectorAll('.parallel-trans-inline');
+    orphans.forEach(el => el.remove());
   }
 
   private buildTranslatedText(chunks: TextChunk[]): string {
@@ -104,54 +100,56 @@ export class TranslationRenderer {
     return combined;
   }
 
-  private findBlockElement(textNode: Text): Element | null {
-    let current: Element | null = textNode.parentElement;
-    while (current && current !== document.body) {
-      if (this.blockTags.has(current.tagName)) {
-        return current;
-      }
-      current = current.parentElement;
-    }
-    return textNode.parentElement;
-  }
-
-  private upsertParallelTranslation(textNode: Text, translatedText: string): void {
-    const existing = this.appendedTranslations.get(textNode);
-
+  private upsertParallelTranslation(textNode: Text, translatedText: string, targetLang: string): void {
     if (!translatedText) {
-      if (existing) {
-        existing.remove();
-        this.appendedTranslations.delete(textNode);
-      }
+      this.removeParallelTranslation(textNode);
       return;
     }
 
-    if (existing) {
-      existing.textContent = `[${translatedText}]`;
-      return;
+    let span = this.appendedTranslations.get(textNode);
+
+    // Wrapper 및 Span 생성 또는 갱신
+    if (!span) {
+      // 1. Wrapper 생성
+      const wrapper = document.createElement('span');
+      wrapper.className = 'parallel-trans-wrapper';
+      wrapper.dataset.parallelTrans = 'wrapper';
+      // 레이아웃 영향 최소화를 위한 스타일
+      wrapper.style.display = 'inline';
+      
+      // 2. 번역 Span 생성
+      span = document.createElement('span');
+      span.className = 'parallel-trans-inline';
+      span.dataset.parallelTrans = 'inline';
+      
+      const parent = textNode.parentNode;
+      if (!parent) return;
+
+      // 3. DOM 구조 변경: TextNode -> Wrapper(TextNode + Span)
+      parent.replaceChild(wrapper, textNode);
+      wrapper.appendChild(textNode);
+      wrapper.appendChild(span);
+
+      this.appendedTranslations.set(textNode, span);
     }
 
-    const span = document.createElement('span');
-    span.className = 'parallel-trans-inline';
-    span.textContent = `[${translatedText}]`;
-    span.dataset.parallelTrans = 'inline';
-
-    const parent = textNode.parentNode;
-    if (!parent) return;
-
-    if (textNode.nextSibling) {
-      parent.insertBefore(span, textNode.nextSibling);
-    } else {
-      parent.appendChild(span);
-    }
-
-    this.appendedTranslations.set(textNode, span);
+    // 텍스트 및 속성 업데이트
+    span.textContent = ` [${translatedText}]`;
+    span.lang = targetLang;
+    span.setAttribute('aria-label', 'Translation');
   }
 
   private removeParallelTranslation(textNode: Text): void {
     const span = this.appendedTranslations.get(textNode);
     if (span) {
-      span.remove();
+      const wrapper = span.parentElement;
+      // Wrapper 구조인지 확인하고 복원
+      if (wrapper && wrapper.classList.contains('parallel-trans-wrapper') && wrapper.parentNode) {
+        wrapper.parentNode.replaceChild(textNode, wrapper);
+      } else {
+        // Wrapper가 없는 경우 (예외적 상황)
+        span.remove();
+      }
       this.appendedTranslations.delete(textNode);
     }
   }
