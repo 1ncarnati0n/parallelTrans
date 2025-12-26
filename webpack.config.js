@@ -49,13 +49,15 @@ module.exports = {
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
         { from: 'src/popup.html', to: 'popup.html' },
-        { from: 'src/content.css', to: 'content.css' }
+        { from: 'src/content.css', to: 'content.css' },
+        { from: 'icons', to: 'icons' }
       ]
     }),
     new webpack.DefinePlugin({
       'process.env': {
         'DEEPL_API_KEY': JSON.stringify(process.env.DEEPL_API_KEY || ''),
-        'AZURE_TRANSLATION_KEY': JSON.stringify(process.env.AZURE_TRANSLATION_KEY || '')
+        'AZURE_TRANSLATION_KEY': JSON.stringify(process.env.AZURE_TRANSLATION_KEY || ''),
+        'AZURE_REGION': JSON.stringify(process.env.AZURE_REGION || 'koreacentral')
       }
     })
   ],

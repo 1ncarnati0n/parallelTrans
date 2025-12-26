@@ -27,7 +27,7 @@ function getDefaultSettings(): Settings {
     deeplApiKey: CONSTANTS.DEFAULT_DEEPL_API_KEY,
     deeplIsFree: true,
     microsoftApiKey: CONSTANTS.DEFAULT_MICROSOFT_API_KEY,
-    microsoftRegion: 'global',
+    microsoftRegion: CONSTANTS.DEFAULT_MICROSOFT_REGION,
     sourceLang: 'en',
     targetLang: 'ko',
     primaryEngine: 'deepl',
@@ -41,9 +41,32 @@ function getDefaultSettings(): Settings {
 async function initialize() {
   try {
     const stored = await storage.get<Settings>('settings');
-    settings = stored ?? getDefaultSettings();
+    const defaults = getDefaultSettings();
 
-    if (!stored) {
+    if (stored) {
+      settings = stored;
+
+      // 환경변수 API 키가 있으면 저장된 빈 키를 덮어씀 (개발 편의성)
+      let needsUpdate = false;
+
+      if (defaults.deeplApiKey && !settings.deeplApiKey) {
+        settings.deeplApiKey = defaults.deeplApiKey;
+        needsUpdate = true;
+        Logger.info('Background', 'DeepL API 키가 환경변수에서 로드됨');
+      }
+
+      if (defaults.microsoftApiKey && !settings.microsoftApiKey) {
+        settings.microsoftApiKey = defaults.microsoftApiKey;
+        settings.microsoftRegion = defaults.microsoftRegion;
+        needsUpdate = true;
+        Logger.info('Background', 'Microsoft API 키가 환경변수에서 로드됨');
+      }
+
+      if (needsUpdate) {
+        await storage.set('settings', settings);
+      }
+    } else {
+      settings = defaults;
       await storage.set('settings', settings);
       Logger.info('Background', '기본 설정 저장 완료 (API 키 포함)');
     }
