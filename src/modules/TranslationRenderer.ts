@@ -72,9 +72,11 @@ export class TranslationRenderer {
       const parent = wrapper.parentNode;
       if (parent) {
         while (wrapper.firstChild) {
-          // 번역 span은 제거하고 텍스트 노드 등은 부모로 이동
+          // 번역 span과 br은 제거하고 텍스트 노드 등은 부모로 이동
           const child = wrapper.firstChild;
-          if (child instanceof HTMLElement && child.classList.contains('parallel-trans-inline')) {
+          if (child instanceof HTMLElement &&
+              (child.classList.contains('parallel-trans-inline') ||
+               child.classList.contains('parallel-trans-br'))) {
             child.remove();
           } else {
             parent.insertBefore(child, wrapper);
@@ -84,8 +86,8 @@ export class TranslationRenderer {
       }
     });
 
-    // 남은 번역 span 제거
-    const orphans = document.querySelectorAll('.parallel-trans-inline');
+    // 남은 번역 span 및 br 제거
+    const orphans = document.querySelectorAll('.parallel-trans-inline, .parallel-trans-br');
     orphans.forEach(el => el.remove());
   }
 
@@ -125,16 +127,22 @@ export class TranslationRenderer {
       const parent = textNode.parentNode;
       if (!parent) return;
 
-      // 3. DOM 구조 변경: TextNode -> Wrapper(TextNode + Span)
+      // 3. DOM 구조 변경: TextNode -> Wrapper(TextNode + BR + Span)
       parent.replaceChild(wrapper, textNode);
       wrapper.appendChild(textNode);
+
+      // 줄바꿈을 위한 <br> 태그 추가
+      const br = document.createElement('br');
+      br.className = 'parallel-trans-br';
+      wrapper.appendChild(br);
+
       wrapper.appendChild(span);
 
       this.appendedTranslations.set(textNode, span);
     }
 
-    // 텍스트 및 속성 업데이트
-    span.textContent = ` [${translatedText}]`;
+    // 텍스트 및 속성 업데이트 (줄바꿈 후 번역 표시)
+    span.textContent = translatedText;
     span.lang = targetLang;
     span.setAttribute('aria-label', 'Translation');
   }

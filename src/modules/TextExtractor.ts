@@ -52,6 +52,10 @@ export class TextExtractor {
             if (this.excludedTags.has(el.tagName)) {
               return NodeFilter.FILTER_REJECT;
             }
+            // 번역 요소 내부는 제외 (중복 번역 방지)
+            if (el.hasAttribute('data-parallel-trans')) {
+              return NodeFilter.FILTER_REJECT;
+            }
           }
 
           const textContent = textNode.textContent?.trim() || '';
@@ -206,6 +210,12 @@ export class TextExtractor {
     const path: string[] = [];
     let current: Element | null = parent;
     while (current && current !== document.body) {
+      // 번역 wrapper 요소는 경로에서 제외 (nodeKey 일관성 유지)
+      if (current.hasAttribute('data-parallel-trans')) {
+        current = current.parentElement;
+        continue;
+      }
+
       const tag = current.tagName.toLowerCase();
 
       const rawId = typeof current.getAttribute === 'function'

@@ -7,7 +7,6 @@
 
 .parallel-trans-inline {
   display: inline;
-  margin-left: 0.4em;
   /* 원본 스타일 상속 - 최대한 원문과 비슷하게 */
   font-family: inherit;
   font-size: inherit;

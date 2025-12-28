@@ -223,6 +223,11 @@ function setupMutationObserver() {
 
 function processNewTextNode(textNode: Text): void {
   if (!hydrationSettled) return;
+
+  // 번역 요소 내부의 텍스트 노드는 무시
+  const parent = textNode.parentElement;
+  if (parent?.closest('[data-parallel-trans]')) return;
+
   const nodeKey = textExtractor.getNodeKey(textNode);
   if (translatedTexts.has(nodeKey)) return;
 
@@ -246,6 +251,10 @@ const EXCLUDED_TAGS = new Set<string>(CONSTANTS.EXCLUDED_ELEMENTS);
 function processNewElement(element: Element): void {
   if (!hydrationSettled) return;
   if (EXCLUDED_TAGS.has(element.tagName)) return;
+
+  // 번역으로 인해 추가된 요소는 무시 (중복 번역 방지)
+  if (element.hasAttribute('data-parallel-trans')) return;
+  if (element.closest('[data-parallel-trans]')) return;
 
   const translatedNodeKeys = new Set(translatedTexts.keys());
   const segments = textExtractor.extractTextNodes(element, translatedNodeKeys);
