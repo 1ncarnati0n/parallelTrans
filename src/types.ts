@@ -184,11 +184,23 @@ export interface TranslationResult {
 }
 
 // ============== API 에러 ==============
+export type ApiErrorCategory = 
+  | 'NETWORK'       // 네트워크 연결 실패
+  | 'AUTH'          // 인증 오류 (401, 403, 잘못된 API 키)
+  | 'QUOTA'         // 할당량 초과 (429, 456)
+  | 'SERVER'        // 서버 오류 (5xx)
+  | 'INVALID_KEY'   // API 키 형식 오류
+  | 'RATE_LIMIT'    // 요청 속도 제한
+  | 'UNKNOWN';      // 알 수 없는 오류
+
 export interface ApiError {
   status: number;
   message: string;
   engine: TranslationEngine;
+  category: ApiErrorCategory;
+  isRetryable: boolean;
   details?: unknown;
+  timestamp?: number;
 }
 
 // ============== 캐시 통계 ==============

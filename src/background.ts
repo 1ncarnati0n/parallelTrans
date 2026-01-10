@@ -3,7 +3,7 @@
  */
 
 import { TranslationManager } from './translators';
-import { TranslationCache, StorageManager, RateLimiter, Logger, delay, extractErrorMessage } from './utils';
+import { TranslationCache, StorageManager, RateLimiter, Logger, delay, extractErrorMessage, isApiRelatedError, diagnoseApiError } from './utils';
 import {
   Message,
   TranslationRequest,
@@ -141,7 +141,7 @@ async function handleMessage(message: Message) {
       await storage.set('settings', settings);
       manager.configure(settings);
       await cache.clear();
-      
+
       // 모든 탭에 설정 변경 알림
       try {
         const tabs = await chrome.tabs.query({});
@@ -158,7 +158,7 @@ async function handleMessage(message: Message) {
       } catch (error) {
         Logger.warn('Background', 'Failed to broadcast settings update', error);
       }
-      
+
       return { success: true };
     }
 
@@ -285,7 +285,7 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
         const totalChars = texts.reduce((sum, text) => sum + text.length, 0);
 
         // Primary 엔진 시도
-        const success = await translateBatchWithEngine(
+        const primaryResult = await translateBatchWithEngine(
           settings.primaryEngine,
           batch,
           texts,
@@ -296,10 +296,10 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
         );
 
         // Primary 실패 시 Fallback 시도
-        if (!success) {
+        if (!primaryResult.success) {
           Logger.warn('Background', `${settings.primaryEngine} 배치 실패, ${settings.fallbackEngine} 시도`);
 
-          const fallbackSuccess = await translateBatchWithEngine(
+          const fallbackResult = await translateBatchWithEngine(
             settings.fallbackEngine,
             batch,
             texts,
@@ -309,9 +309,15 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
             results
           );
 
-          if (!fallbackSuccess) {
+          if (!fallbackResult.success) {
+            const errorInfo = fallbackResult.errorInfo || primaryResult.errorInfo;
             Logger.error('Background', `배치 번역 완전 실패 (${texts.length}개)`);
-            return { success: false, error: 'Batch translation failed on all engines' };
+            return {
+              success: false,
+              error: `Batch translation failed on all engines: ${errorInfo?.message || 'Unknown error'}`,
+              errorCategory: errorInfo?.category,
+              isApiError: true
+            };
           }
         }
 
@@ -329,6 +335,15 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
   }
 }
 
+interface BatchEngineResult {
+  success: boolean;
+  errorInfo?: {
+    message: string;
+    category: string;
+    status: number;
+  };
+}
+
 async function translateBatchWithEngine(
   engine: TranslationEngine,
   batch: { index: number; text: string }[],
@@ -337,7 +352,7 @@ async function translateBatchWithEngine(
   sourceLang: string,
   targetLang: string,
   results: string[]
-): Promise<boolean> {
+): Promise<BatchEngineResult> {
   try {
     await rateLimiter.waitForBatch(engine, totalChars);
 
@@ -353,10 +368,32 @@ async function translateBatchWithEngine(
       cache.set(item.text, response.translations[idx], sourceLang, targetLang, engine);
     });
 
-    return true;
+    return { success: true };
   } catch (error: unknown) {
-    Logger.error('Background', `${engine} 배치 번역 실패`, error);
-    return false;
+    // API 관련 오류인지 확인하여 상세 진단 제공
+    if (isApiRelatedError(error)) {
+      const diagnosis = diagnoseApiError(error);
+      Logger.error('Background', `${engine} 배치 번역 실패:\n${diagnosis}`);
+      return {
+        success: false,
+        errorInfo: {
+          message: diagnosis,
+          category: error.category,
+          status: error.status,
+        },
+      };
+    } else {
+      const errMsg = extractErrorMessage(error, '알 수 없는 오류');
+      Logger.error('Background', `${engine} 배치 번역 실패 (비API 오류)`, error);
+      return {
+        success: false,
+        errorInfo: {
+          message: errMsg,
+          category: 'UNKNOWN',
+          status: 0,
+        },
+      };
+    }
   }
 }
 

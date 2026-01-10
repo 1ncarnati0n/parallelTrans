@@ -3,7 +3,7 @@
  */
 
 import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, ApiError, TranslationEngine, Settings } from './types';
-import { Logger } from './utils';
+import { Logger, createApiError, diagnoseApiError } from './utils';
 
 // ============== 번역 엔진 인터페이스 ==============
 export interface ITranslationEngine {
@@ -45,13 +45,12 @@ export class DeepL implements ITranslationEngine {
     if (!response.ok) {
       let errorMessage = `DeepL error: ${response.status}`;
       let errorDetails: unknown;
-      
+
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorData.error?.message || errorMessage;
         errorDetails = errorData;
       } catch {
-        // JSON 파싱 실패 시 텍스트로 시도
         try {
           const errorText = await response.text();
           errorMessage = errorText || errorMessage;
@@ -59,30 +58,19 @@ export class DeepL implements ITranslationEngine {
           // 무시
         }
       }
-      
-      const apiError: ApiError = {
-        status: response.status,
-        message: errorMessage,
-        engine: 'deepl',
-        details: errorDetails,
-      };
-      
-      Logger.error('DeepL', `Translation failed: ${errorMessage}`, apiError);
+
+      const apiError = createApiError(response.status, errorMessage, 'deepl', errorDetails);
+      Logger.error('DeepL', `Translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
-    
+
     if (!data.translations || !data.translations[0] || !data.translations[0].text) {
-      const error: ApiError = {
-        status: response.status,
-        message: 'Invalid response format from DeepL',
-        engine: 'deepl',
-        details: data,
-      };
+      const error = createApiError(response.status, 'Invalid response format from DeepL', 'deepl', data);
       throw error;
     }
-    
+
     return {
       translatedText: data.translations[0].text,
       engine: 'deepl',
@@ -107,7 +95,7 @@ export class DeepL implements ITranslationEngine {
     if (!response.ok) {
       let errorMessage = `DeepL batch error: ${response.status}`;
       let errorDetails: unknown;
-      
+
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorData.error?.message || errorMessage;
@@ -120,30 +108,19 @@ export class DeepL implements ITranslationEngine {
           // 무시
         }
       }
-      
-      const apiError: ApiError = {
-        status: response.status,
-        message: errorMessage,
-        engine: 'deepl',
-        details: errorDetails,
-      };
-      
-      Logger.error('DeepL', `Batch translation failed: ${errorMessage}`, apiError);
+
+      const apiError = createApiError(response.status, errorMessage, 'deepl', errorDetails);
+      Logger.error('DeepL', `Batch translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
-    
+
     if (!data.translations || !Array.isArray(data.translations)) {
-      const error: ApiError = {
-        status: response.status,
-        message: 'Invalid batch response format from DeepL',
-        engine: 'deepl',
-        details: data,
-      };
+      const error = createApiError(response.status, 'Invalid batch response format from DeepL', 'deepl', data);
       throw error;
     }
-    
+
     return {
       translations: data.translations.map((t: { text: string }) => t.text),
       engine: 'deepl',
@@ -190,7 +167,7 @@ export class Microsoft implements ITranslationEngine {
     if (!response.ok) {
       let errorMessage = `Microsoft error: ${response.status}`;
       let errorDetails: unknown;
-      
+
       try {
         const errorData = await response.json();
         errorMessage = errorData.error?.message || errorMessage;
@@ -203,30 +180,19 @@ export class Microsoft implements ITranslationEngine {
           // 무시
         }
       }
-      
-      const apiError: ApiError = {
-        status: response.status,
-        message: errorMessage,
-        engine: 'microsoft',
-        details: errorDetails,
-      };
-      
-      Logger.error('Microsoft', `Translation failed: ${errorMessage}`, apiError);
+
+      const apiError = createApiError(response.status, errorMessage, 'microsoft', errorDetails);
+      Logger.error('Microsoft', `Translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
-    
+
     if (!Array.isArray(data) || !data[0] || !data[0].translations || !data[0].translations[0] || !data[0].translations[0].text) {
-      const error: ApiError = {
-        status: response.status,
-        message: 'Invalid response format from Microsoft',
-        engine: 'microsoft',
-        details: data,
-      };
+      const error = createApiError(response.status, 'Invalid response format from Microsoft', 'microsoft', data);
       throw error;
     }
-    
+
     return {
       translatedText: data[0].translations[0].text,
       engine: 'microsoft',
@@ -249,7 +215,7 @@ export class Microsoft implements ITranslationEngine {
     if (!response.ok) {
       let errorMessage = `Microsoft batch error: ${response.status}`;
       let errorDetails: unknown;
-      
+
       try {
         const errorData = await response.json();
         errorMessage = errorData.error?.message || errorMessage;
@@ -262,30 +228,19 @@ export class Microsoft implements ITranslationEngine {
           // 무시
         }
       }
-      
-      const apiError: ApiError = {
-        status: response.status,
-        message: errorMessage,
-        engine: 'microsoft',
-        details: errorDetails,
-      };
-      
-      Logger.error('Microsoft', `Batch translation failed: ${errorMessage}`, apiError);
+
+      const apiError = createApiError(response.status, errorMessage, 'microsoft', errorDetails);
+      Logger.error('Microsoft', `Batch translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
-    
+
     if (!Array.isArray(data) || data.length !== request.texts.length) {
-      const error: ApiError = {
-        status: response.status,
-        message: 'Invalid batch response format from Microsoft',
-        engine: 'microsoft',
-        details: data,
-      };
+      const error = createApiError(response.status, 'Invalid batch response format from Microsoft', 'microsoft', data);
       throw error;
     }
-    
+
     return {
       translations: data.map((item: { translations: Array<{ text: string }> }) => item.translations[0].text),
       engine: 'microsoft',
