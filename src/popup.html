@@ -166,107 +166,183 @@
       margin-bottom: 12px;
     }
 
+    .engine-section.collapsed {
+      background: #fafafa;
+    }
+
+    .engine-section.collapsed .api-key-input {
+      display: none;
+    }
+
+    .engine-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .engine-header h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+    }
+
+    .engine-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .badge-nmt {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .badge-llm {
+      background: #fce4ec;
+      color: #c2185b;
+    }
+
     .engine-status {
       font-size: 11px;
       color: #999;
       margin-top: 6px;
     }
+
+    .toggle-icon {
+      font-size: 12px;
+      color: #999;
+      transition: transform 0.2s;
+    }
+
+    .engine-section.collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+
+    .api-key-input {
+      margin-top: 10px;
+    }
+
+    .api-key-input input {
+      margin-bottom: 4px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>⚡ ParallelTrans</h1>
-    <div class="subtitle">빠르고 효율적인 병렬 번역 | Option+A: 번역 ON/OFF</div>
+    <h1>ParallelTrans</h1>
+    <div class="subtitle">Multi-Engine Translation | Option+A: ON/OFF</div>
 
     <div id="status" class="status"></div>
 
     <label class="checkbox-label">
       <input type="checkbox" id="enabled">
-      <span>번역 활성화</span>
+      <span>Enable Translation</span>
     </label>
 
-    <!-- 번역 엔진 설정 -->
-    <h2>🚀 번역 엔진</h2>
+    <!-- Translation Engine Selection -->
+    <h2>Translation Engine</h2>
+    <select id="primaryEngine">
+      <option value="deepl">DeepL (NMT) - High Quality</option>
+      <option value="google-nmt">Google Translate (NMT) - Fast</option>
+      <option value="gemini-llm">Gemini (LLM) - Context-Aware</option>
+    </select>
+    <div class="help-text">
+      NMT: Fast, consistent | LLM: Better context understanding, slower
+    </div>
+
+    <!-- API Keys -->
+    <h2>API Keys</h2>
+
+    <!-- DeepL -->
+    <div class="engine-section" id="deeplSection">
+      <div class="engine-header" onclick="toggleSection('deeplSection')">
+        <div>
+          <h3>DeepL API</h3>
+          <span class="engine-badge badge-nmt">NMT</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="api-key-input">
+        <label>API Key</label>
+        <input type="password" id="deeplKey" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx">
+        <label class="checkbox-label" style="margin-top: 4px;">
+          <input type="checkbox" id="deeplIsFree" checked>
+          <span style="font-size: 11px;">Free API (api-free.deepl.com)</span>
+        </label>
+        <div class="help-text">
+          <a href="https://www.deepl.com/pro-api" target="_blank" style="color: #667eea;">Get DeepL API Key</a> | Free: 500K chars/month
+        </div>
+      </div>
+    </div>
+
+    <!-- Google -->
+    <div class="engine-section" id="googleSection">
+      <div class="engine-header" onclick="toggleSection('googleSection')">
+        <div>
+          <h3>Google Cloud API</h3>
+          <span class="engine-badge badge-nmt">NMT</span>
+          <span class="engine-badge badge-llm">LLM</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="api-key-input">
+        <label>API Key (Translation + Gemini)</label>
+        <input type="password" id="googleKey" placeholder="AIza...">
+        <div class="help-text">
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: #667eea;">Get Google API Key</a> | Used for both NMT and Gemini
+        </div>
+      </div>
+    </div>
+
+    <!-- Translation Settings -->
+    <h2>Translation Settings</h2>
     <div class="row">
       <div>
-        <label>우선 엔진</label>
-        <select id="primaryEngine">
-          <option value="deepl">DeepL</option>
-          <option value="microsoft">Microsoft</option>
-        </select>
-      </div>
-      <div>
-        <label>백업 엔진</label>
-        <select id="fallbackEngine">
-          <option value="deepl">DeepL</option>
-          <option value="microsoft">Microsoft</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- DeepL API 설정 -->
-    <h2>🔑 DeepL API</h2>
-    <div class="engine-section">
-      <label>API Key</label>
-      <input type="password" id="deeplKey" placeholder="sk-xxx... (Free/Pro 키)">
-      <div class="help-text">
-        💡 <a href="https://www.deepl.com/pro" target="_blank" style="color: #667eea; text-decoration: none;">DeepL API 키 받기</a> | Free: 50만자/월 | Pro: 무제한
-      </div>
-    </div>
-
-    <!-- Microsoft API 설정 -->
-    <h2>🔑 Microsoft API</h2>
-    <div class="engine-section">
-      <label>API Key</label>
-      <input type="password" id="microsoftKey" placeholder="xxxxxxxx...">
-
-      <label>Azure 리전</label>
-      <input type="text" id="microsoftRegion" placeholder="예: koreacentral" value="global">
-      <div class="help-text">
-        💡 <a href="https://azure.microsoft.com" target="_blank" style="color: #667eea; text-decoration: none;">Azure에서 키 발급</a> | Free: 200만자/월
-      </div>
-    </div>
-
-    <!-- 번역 설정 -->
-    <h2>⚙️ 번역 설정</h2>
-    <div class="row">
-      <div>
-        <label>원본 언어</label>
+        <label>Source Language</label>
         <select id="sourceLang">
           <option value="en">English</option>
-          <option value="ko">한국어</option>
-          <option value="ja">日本語</option>
-          <option value="zh">中文</option>
-          <option value="es">Español</option>
-          <option value="fr">Français</option>
-          <option value="de">Deutsch</option>
+          <option value="ko">Korean</option>
+          <option value="ja">Japanese</option>
+          <option value="zh">Chinese</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
         </select>
       </div>
       <div>
-        <label>대상 언어</label>
+        <label>Target Language</label>
         <select id="targetLang">
           <option value="en">English</option>
-          <option value="ko">한국어</option>
-          <option value="ja">日本語</option>
-          <option value="zh">中文</option>
-          <option value="es">Español</option>
-          <option value="fr">Français</option>
-          <option value="de">Deutsch</option>
+          <option value="ko">Korean</option>
+          <option value="ja">Japanese</option>
+          <option value="zh">Chinese</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
         </select>
       </div>
     </div>
 
-    <label>표시 방식</label>
+    <label>Display Mode</label>
     <select id="displayMode">
-      <option value="parallel">병렬 표기 (원문 [번역])</option>
-      <option value="translation-only">번역만 표시</option>
+      <option value="parallel">Parallel (Original [Translation])</option>
+      <option value="translation-only">Translation Only</option>
     </select>
 
-    <button id="saveBtn">💾 설정 저장</button>
+    <button id="saveBtn">Save Settings</button>
 
     <div id="stats"></div>
   </div>
 
+  <script>
+    // Toggle section collapse
+    function toggleSection(sectionId) {
+      const section = document.getElementById(sectionId);
+      section.classList.toggle('collapsed');
+    }
+  </script>
   <script src="popup.js"></script>
 </body>
 </html>

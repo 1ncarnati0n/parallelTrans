@@ -170,7 +170,7 @@ export class TranslationCache {
       }
     } else {
       // 엔진이 지정되지 않으면 모든 엔진 검색
-      for (const eng of ['deepl', 'microsoft'] as TranslationEngine[]) {
+      for (const eng of ['deepl', 'google-nmt', 'gemini-llm'] as TranslationEngine[]) {
         const key = this.getCacheKey(text, sourceLang, targetLang, eng);
         const entry = this.cache.get(key);
         if (entry && Date.now() - entry.timestamp <= this.maxAge) {
@@ -221,17 +221,24 @@ export class TranslationCache {
 // ============== 레이트 제한 ==============
 /**
  * API 호출 속도 제한
- * - DeepL Free: 50만 자/월, 약 50 requests/분
- * - Microsoft: 1초당 100 요청
+ * - DeepL: 100ms 간격 (Free API 제한)
+ * - Google NMT: 50ms 간격 (빠름)
+ * - Gemini LLM: 200ms 간격 (LLM은 처리 시간이 더 필요)
  */
 export class RateLimiter {
-  private lastRequestTime = { deepl: 0, microsoft: 0 };
-  private minInterval = {
-    deepl: CONSTANTS.RATE_LIMIT_DEEPL,
-    microsoft: CONSTANTS.RATE_LIMIT_MICROSOFT
+  private lastRequestTime: Record<TranslationEngine, number> = {
+    'deepl': 0,
+    'google-nmt': 0,
+    'gemini-llm': 0,
   };
 
-  async waitForSlot(engine: 'deepl' | 'microsoft'): Promise<void> {
+  private minInterval: Record<TranslationEngine, number> = {
+    'deepl': CONSTANTS.RATE_LIMIT_DEEPL,
+    'google-nmt': CONSTANTS.RATE_LIMIT_GOOGLE,
+    'gemini-llm': CONSTANTS.RATE_LIMIT_GEMINI,
+  };
+
+  async waitForSlot(engine: TranslationEngine): Promise<void> {
     const now = Date.now();
     const lastTime = this.lastRequestTime[engine];
     const timeSinceLastRequest = now - lastTime;
@@ -246,16 +253,14 @@ export class RateLimiter {
     this.lastRequestTime[engine] = Date.now();
   }
 
-  async waitForBatch(engine: 'deepl' | 'microsoft', totalChars: number): Promise<void> {
+  async waitForBatch(engine: TranslationEngine, totalChars: number): Promise<void> {
     await this.waitForSlot(engine);
 
-    // Microsoft의 경우 추가 제한 (1초당 100K 문자)
-    if (engine === 'microsoft' && totalChars > 1000) {
-      const extraWait = Math.max(0, totalChars / 10000 * 100);
-      if (extraWait > 0) {
-        Logger.debug('RateLimiter', `Microsoft 배치 크기로 인한 추가 대기: ${extraWait}ms`);
-        await new Promise(resolve => setTimeout(resolve, extraWait));
-      }
+    // Gemini LLM은 큰 배치에서 추가 대기 시간 필요 (토큰 처리 시간)
+    if (engine === 'gemini-llm' && totalChars > 1000) {
+      const extraWait = Math.min(totalChars / 100, 500); // 최대 500ms
+      Logger.debug('RateLimiter', `Gemini 배치 크기로 인한 추가 대기: ${extraWait}ms`);
+      await new Promise(resolve => setTimeout(resolve, extraWait));
     }
   }
 }

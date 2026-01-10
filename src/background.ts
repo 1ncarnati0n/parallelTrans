@@ -24,14 +24,15 @@ let settings: Settings;
 function getDefaultSettings(): Settings {
   return {
     enabled: true,
+    // API Keys
     deeplApiKey: CONSTANTS.DEFAULT_DEEPL_API_KEY,
     deeplIsFree: true,
-    microsoftApiKey: CONSTANTS.DEFAULT_MICROSOFT_API_KEY,
-    microsoftRegion: CONSTANTS.DEFAULT_MICROSOFT_REGION,
+    googleApiKey: CONSTANTS.DEFAULT_GOOGLE_API_KEY,
+    geminiApiKey: CONSTANTS.DEFAULT_GEMINI_API_KEY,
+    // Translation Settings
     sourceLang: 'en',
     targetLang: 'ko',
-    primaryEngine: 'deepl',
-    fallbackEngine: 'microsoft',
+    primaryEngine: 'google-nmt', // 기본 엔진
     displayMode: 'parallel',
     cacheEnabled: true,
     viewportTranslation: true,
@@ -44,7 +45,7 @@ async function initialize() {
     const defaults = getDefaultSettings();
 
     if (stored) {
-      settings = stored;
+      settings = { ...defaults, ...stored }; // 새 필드 추가 시 기본값 병합
 
       // 환경변수 API 키가 있으면 저장된 빈 키를 덮어씀 (개발 편의성)
       let needsUpdate = false;
@@ -55,11 +56,16 @@ async function initialize() {
         Logger.info('Background', 'DeepL API 키가 환경변수에서 로드됨');
       }
 
-      if (defaults.microsoftApiKey && !settings.microsoftApiKey) {
-        settings.microsoftApiKey = defaults.microsoftApiKey;
-        settings.microsoftRegion = defaults.microsoftRegion;
+      if (defaults.googleApiKey && !settings.googleApiKey) {
+        settings.googleApiKey = defaults.googleApiKey;
         needsUpdate = true;
-        Logger.info('Background', 'Microsoft API 키가 환경변수에서 로드됨');
+        Logger.info('Background', 'Google API 키가 환경변수에서 로드됨');
+      }
+
+      if (defaults.geminiApiKey && !settings.geminiApiKey) {
+        settings.geminiApiKey = defaults.geminiApiKey;
+        needsUpdate = true;
+        Logger.info('Background', 'Gemini API 키가 환경변수에서 로드됨');
       }
 
       if (needsUpdate) {
@@ -217,18 +223,15 @@ async function handleTranslate(request: TranslationRequest) {
   }
 
   try {
-    // 캐시 확인 (엔진 우선순위로 검색)
-    let cached = await cache.get(request.text, request.sourceLang, request.targetLang, settings.primaryEngine);
-    if (!cached) {
-      cached = await cache.get(request.text, request.sourceLang, request.targetLang, settings.fallbackEngine);
-    }
+    // 캐시 확인
+    const cached = await cache.get(request.text, request.sourceLang, request.targetLang, settings.primaryEngine);
     if (cached) {
       Logger.debug('Background', `Cache hit (${Date.now() - startTime}ms)`);
       return { success: true, translation: cached.translation };
     }
 
-    // Fallback을 고려한 번역
-    const engines: TranslationEngine[] = [settings.primaryEngine, settings.fallbackEngine];
+    // 번역 (단일 엔진)
+    const engines: TranslationEngine[] = [settings.primaryEngine];
     const result = await translateWithFallback(request, engines);
 
     Logger.debug('Background', `Translated (${Date.now() - startTime}ms)`);
@@ -253,12 +256,7 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
 
     // 캐시 확인 (병렬 조회)
     const cacheChecks = request.texts.map(async (text, index) => {
-      // Primary 엔진 캐시 먼저 확인
-      let cached = await cache.get(text, request.sourceLang, request.targetLang, settings.primaryEngine);
-      if (!cached) {
-        // Fallback 엔진 캐시 확인
-        cached = await cache.get(text, request.sourceLang, request.targetLang, settings.fallbackEngine);
-      }
+      const cached = await cache.get(text, request.sourceLang, request.targetLang, settings.primaryEngine);
       return { index, text, cached };
     });
 
@@ -284,8 +282,8 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
         const texts = batch.map(b => b.text);
         const totalChars = texts.reduce((sum, text) => sum + text.length, 0);
 
-        // Primary 엔진 시도
-        const primaryResult = await translateBatchWithEngine(
+        // 엔진으로 번역
+        const result = await translateBatchWithEngine(
           settings.primaryEngine,
           batch,
           texts,
@@ -295,30 +293,15 @@ async function handleBatchTranslate(request: BatchTranslationRequest) {
           results
         );
 
-        // Primary 실패 시 Fallback 시도
-        if (!primaryResult.success) {
-          Logger.warn('Background', `${settings.primaryEngine} 배치 실패, ${settings.fallbackEngine} 시도`);
-
-          const fallbackResult = await translateBatchWithEngine(
-            settings.fallbackEngine,
-            batch,
-            texts,
-            totalChars,
-            request.sourceLang,
-            request.targetLang,
-            results
-          );
-
-          if (!fallbackResult.success) {
-            const errorInfo = fallbackResult.errorInfo || primaryResult.errorInfo;
-            Logger.error('Background', `배치 번역 완전 실패 (${texts.length}개)`);
-            return {
-              success: false,
-              error: `Batch translation failed on all engines: ${errorInfo?.message || 'Unknown error'}`,
-              errorCategory: errorInfo?.category,
-              isApiError: true
-            };
-          }
+        if (!result.success) {
+          const errorInfo = result.errorInfo;
+          Logger.error('Background', `배치 번역 실패 (${texts.length}개)`);
+          return {
+            success: false,
+            error: `Batch translation failed: ${errorInfo?.message || 'Unknown error'}`,
+            errorCategory: errorInfo?.category,
+            isApiError: true
+          };
         }
 
         // 배치 간 딜레이

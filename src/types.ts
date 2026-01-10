@@ -55,7 +55,8 @@ export const CONSTANTS = {
 
   // Rate Limiting (ms)
   RATE_LIMIT_DEEPL: 100,
-  RATE_LIMIT_MICROSOFT: 50,
+  RATE_LIMIT_GOOGLE: 50,
+  RATE_LIMIT_GEMINI: 200, // LLM은 더 느리므로 여유 있게
 
   // 재시도 설정
   MAX_RETRY_COUNT: 3,
@@ -63,8 +64,8 @@ export const CONSTANTS = {
 
   // API 기본 키 (.env에서 자동 로드)
   DEFAULT_DEEPL_API_KEY: process.env.DEEPL_API_KEY || '',
-  DEFAULT_MICROSOFT_API_KEY: process.env.AZURE_TRANSLATION_KEY || '',
-  DEFAULT_MICROSOFT_REGION: process.env.AZURE_REGION || 'koreacentral',
+  DEFAULT_GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || '',
+  DEFAULT_GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
 
   // 블록 레벨 요소
   BLOCK_ELEMENTS: ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'FIGCAPTION'],
@@ -74,9 +75,22 @@ export const CONSTANTS = {
 } as const;
 
 // ============== 번역 엔진 ==============
-export type TranslationEngine = 'deepl' | 'microsoft';
+/**
+ * 번역 엔진 타입
+ * - deepl: DeepL API (NMT - Neural Machine Translation)
+ * - google-nmt: Google Cloud Translation API (NMT)
+ * - gemini-llm: Google Gemini API (LLM-based translation)
+ */
+export type TranslationEngine = 'deepl' | 'google-nmt' | 'gemini-llm';
 export type DisplayMode = 'parallel' | 'translation-only';
 export type TriggerMode = 'auto' | 'manual';
+
+// 엔진 메타데이터
+export const ENGINE_INFO: Record<TranslationEngine, { name: string; type: 'nmt' | 'llm'; description: string }> = {
+  'deepl': { name: 'DeepL', type: 'nmt', description: 'High quality NMT, fast' },
+  'google-nmt': { name: 'Google Translate', type: 'nmt', description: 'Broad language support, very fast' },
+  'gemini-llm': { name: 'Gemini', type: 'llm', description: 'Context-aware LLM translation' },
+};
 
 // ============== 번역 요청/응답 ==============
 export interface TranslationRequest {
@@ -104,14 +118,15 @@ export interface BatchTranslationResponse {
 // ============== 설정 ==============
 export interface Settings {
   enabled: boolean;
+  // API Keys
   deeplApiKey: string;
-  deeplIsFree: boolean;
-  microsoftApiKey: string;
-  microsoftRegion: string;
+  deeplIsFree: boolean; // DeepL Free vs Pro
+  googleApiKey: string; // Google Cloud Translation & Gemini 공용
+  geminiApiKey: string; // Gemini 전용 (선택)
+  // Translation Settings
   sourceLang: string;
   targetLang: string;
   primaryEngine: TranslationEngine;
-  fallbackEngine: TranslationEngine;
   displayMode: DisplayMode;
   cacheEnabled: boolean;
   viewportTranslation: boolean;

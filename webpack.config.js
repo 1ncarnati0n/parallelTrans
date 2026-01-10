@@ -55,9 +55,7 @@ module.exports = {
     }),
     new webpack.DefinePlugin({
       'process.env': {
-        'DEEPL_API_KEY': JSON.stringify(process.env.DEEPL_API_KEY || ''),
-        'AZURE_TRANSLATION_KEY': JSON.stringify(process.env.AZURE_TRANSLATION_KEY || ''),
-        'AZURE_REGION': JSON.stringify(process.env.AZURE_REGION || 'koreacentral')
+        'GOOGLE_TRANSLATE_API_KEY': JSON.stringify(process.env.GOOGLE_TRANSLATE_API_KEY || '')
       }
     })
   ],

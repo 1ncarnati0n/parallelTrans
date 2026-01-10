@@ -1,8 +1,11 @@
 /**
  * Translation Engines
+ * - DeepL: NMT (Neural Machine Translation)
+ * - Google NMT: Google Cloud Translation API v2
+ * - Gemini LLM: Google Gemini API for context-aware translation
  */
 
-import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, ApiError, TranslationEngine, Settings } from './types';
+import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, TranslationEngine, Settings } from './types';
 import { Logger, createApiError, diagnoseApiError } from './utils';
 
 // ============== 번역 엔진 인터페이스 ==============
@@ -12,7 +15,7 @@ export interface ITranslationEngine {
   translateBatch(request: BatchTranslationRequest): Promise<BatchTranslationResponse>;
 }
 
-// ============== DeepL ==============
+// ============== DeepL API ==============
 export class DeepL implements ITranslationEngine {
   private apiUrl: string;
   private apiKey: string;
@@ -43,32 +46,16 @@ export class DeepL implements ITranslationEngine {
     });
 
     if (!response.ok) {
-      let errorMessage = `DeepL error: ${response.status}`;
-      let errorDetails: unknown;
-
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorData.error?.message || errorMessage;
-        errorDetails = errorData;
-      } catch {
-        try {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-        } catch {
-          // 무시
-        }
-      }
-
-      const apiError = createApiError(response.status, errorMessage, 'deepl', errorDetails);
+      const errorMessage = await this.extractErrorMessage(response, 'DeepL error');
+      const apiError = createApiError(response.status, errorMessage, 'deepl');
       Logger.error('DeepL', `Translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
 
-    if (!data.translations || !data.translations[0] || !data.translations[0].text) {
-      const error = createApiError(response.status, 'Invalid response format from DeepL', 'deepl', data);
-      throw error;
+    if (!data.translations?.[0]?.text) {
+      throw createApiError(response.status, 'Invalid response format from DeepL', 'deepl', data);
     }
 
     return {
@@ -84,6 +71,7 @@ export class DeepL implements ITranslationEngine {
       target_lang: this.mapLang(request.targetLang),
     });
 
+    // DeepL은 여러 텍스트를 'text' 파라미터로 반복 추가
     request.texts.forEach(text => params.append('text', text));
 
     const response = await fetch(this.apiUrl, {
@@ -93,23 +81,8 @@ export class DeepL implements ITranslationEngine {
     });
 
     if (!response.ok) {
-      let errorMessage = `DeepL batch error: ${response.status}`;
-      let errorDetails: unknown;
-
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorData.error?.message || errorMessage;
-        errorDetails = errorData;
-      } catch {
-        try {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-        } catch {
-          // 무시
-        }
-      }
-
-      const apiError = createApiError(response.status, errorMessage, 'deepl', errorDetails);
+      const errorMessage = await this.extractErrorMessage(response, 'DeepL batch error');
+      const apiError = createApiError(response.status, errorMessage, 'deepl');
       Logger.error('DeepL', `Batch translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
@@ -117,8 +90,7 @@ export class DeepL implements ITranslationEngine {
     const data = await response.json();
 
     if (!data.translations || !Array.isArray(data.translations)) {
-      const error = createApiError(response.status, 'Invalid batch response format from DeepL', 'deepl', data);
-      throw error;
+      throw createApiError(response.status, 'Invalid batch response format from DeepL', 'deepl', data);
     }
 
     return {
@@ -134,17 +106,28 @@ export class DeepL implements ITranslationEngine {
     };
     return map[lang.toLowerCase()] || lang.toUpperCase();
   }
+
+  private async extractErrorMessage(response: Response, defaultMsg: string): Promise<string> {
+    try {
+      const errorData = await response.json();
+      return errorData.message || errorData.error?.message || `${defaultMsg}: ${response.status}`;
+    } catch {
+      try {
+        return await response.text() || `${defaultMsg}: ${response.status}`;
+      } catch {
+        return `${defaultMsg}: ${response.status}`;
+      }
+    }
+  }
 }
 
-// ============== Microsoft ==============
-export class Microsoft implements ITranslationEngine {
-  private apiUrl = 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0';
+// ============== Google Cloud Translation API v2 (NMT) ==============
+export class GoogleNMT implements ITranslationEngine {
+  private apiUrl = 'https://translation.googleapis.com/language/translate/v2';
   private apiKey: string;
-  private region: string;
 
-  constructor(apiKey: string, region: string = 'global') {
+  constructor(apiKey: string) {
     this.apiKey = apiKey;
-    this.region = region;
   }
 
   isConfigured(): boolean {
@@ -152,99 +135,273 @@ export class Microsoft implements ITranslationEngine {
   }
 
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
-    const url = `${this.apiUrl}&from=${request.sourceLang}&to=${request.targetLang}`;
+    const url = `${this.apiUrl}?key=${this.apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Ocp-Apim-Subscription-Key': this.apiKey,
-        'Ocp-Apim-Subscription-Region': this.region,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([{ text: request.text }]),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        q: request.text,
+        source: this.mapLang(request.sourceLang),
+        target: this.mapLang(request.targetLang),
+        format: 'text',
+      }),
     });
 
     if (!response.ok) {
-      let errorMessage = `Microsoft error: ${response.status}`;
-      let errorDetails: unknown;
-
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error?.message || errorMessage;
-        errorDetails = errorData;
-      } catch {
-        try {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-        } catch {
-          // 무시
-        }
-      }
-
-      const apiError = createApiError(response.status, errorMessage, 'microsoft', errorDetails);
-      Logger.error('Microsoft', `Translation failed - ${diagnoseApiError(apiError)}`);
+      const errorMessage = await this.extractErrorMessage(response, 'Google NMT error');
+      const apiError = createApiError(response.status, errorMessage, 'google-nmt');
+      Logger.error('GoogleNMT', `Translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
 
-    if (!Array.isArray(data) || !data[0] || !data[0].translations || !data[0].translations[0] || !data[0].translations[0].text) {
-      const error = createApiError(response.status, 'Invalid response format from Microsoft', 'microsoft', data);
-      throw error;
+    if (!data.data?.translations?.[0]?.translatedText) {
+      throw createApiError(response.status, 'Invalid response format from Google NMT', 'google-nmt', data);
     }
 
     return {
-      translatedText: data[0].translations[0].text,
-      engine: 'microsoft',
+      translatedText: data.data.translations[0].translatedText,
+      engine: 'google-nmt',
     };
   }
 
   async translateBatch(request: BatchTranslationRequest): Promise<BatchTranslationResponse> {
-    const url = `${this.apiUrl}&from=${request.sourceLang}&to=${request.targetLang}`;
+    const url = `${this.apiUrl}?key=${this.apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Ocp-Apim-Subscription-Key': this.apiKey,
-        'Ocp-Apim-Subscription-Region': this.region,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request.texts.map(text => ({ text }))),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        q: request.texts,
+        source: this.mapLang(request.sourceLang),
+        target: this.mapLang(request.targetLang),
+        format: 'text',
+      }),
     });
 
     if (!response.ok) {
-      let errorMessage = `Microsoft batch error: ${response.status}`;
-      let errorDetails: unknown;
-
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error?.message || errorMessage;
-        errorDetails = errorData;
-      } catch {
-        try {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-        } catch {
-          // 무시
-        }
-      }
-
-      const apiError = createApiError(response.status, errorMessage, 'microsoft', errorDetails);
-      Logger.error('Microsoft', `Batch translation failed - ${diagnoseApiError(apiError)}`);
+      const errorMessage = await this.extractErrorMessage(response, 'Google NMT batch error');
+      const apiError = createApiError(response.status, errorMessage, 'google-nmt');
+      Logger.error('GoogleNMT', `Batch translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
 
-    if (!Array.isArray(data) || data.length !== request.texts.length) {
-      const error = createApiError(response.status, 'Invalid batch response format from Microsoft', 'microsoft', data);
-      throw error;
+    if (!data.data?.translations || !Array.isArray(data.data.translations)) {
+      throw createApiError(response.status, 'Invalid batch response format from Google NMT', 'google-nmt', data);
     }
 
     return {
-      translations: data.map((item: { translations: Array<{ text: string }> }) => item.translations[0].text),
-      engine: 'microsoft',
+      translations: data.data.translations.map((t: { translatedText: string }) => t.translatedText),
+      engine: 'google-nmt',
     };
+  }
+
+  private mapLang(lang: string): string {
+    const map: Record<string, string> = {
+      'zh': 'zh-CN',
+      'zh-tw': 'zh-TW',
+    };
+    return map[lang.toLowerCase()] || lang.toLowerCase();
+  }
+
+  private async extractErrorMessage(response: Response, defaultMsg: string): Promise<string> {
+    try {
+      const errorData = await response.json();
+      return errorData.error?.message || `${defaultMsg}: ${response.status}`;
+    } catch {
+      return `${defaultMsg}: ${response.status}`;
+    }
+  }
+}
+
+// ============== Google Gemini API (LLM-based Translation) ==============
+export class GeminiLLM implements ITranslationEngine {
+  private apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  isConfigured(): boolean {
+    return Boolean(this.apiKey?.trim());
+  }
+
+  async translate(request: TranslationRequest): Promise<TranslationResponse> {
+    const prompt = this.buildTranslationPrompt(request.text, request.sourceLang, request.targetLang);
+    const url = `${this.apiUrl}?key=${this.apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1, // 번역은 창의성보다 정확성 중시
+          maxOutputTokens: 2048,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorMessage = await this.extractErrorMessage(response, 'Gemini error');
+      const apiError = createApiError(response.status, errorMessage, 'gemini-llm');
+      Logger.error('GeminiLLM', `Translation failed - ${diagnoseApiError(apiError)}`);
+      throw apiError;
+    }
+
+    const data = await response.json();
+    const translatedText = this.extractTranslation(data);
+
+    if (!translatedText) {
+      throw createApiError(response.status, 'Invalid response format from Gemini', 'gemini-llm', data);
+    }
+
+    return {
+      translatedText,
+      engine: 'gemini-llm',
+    };
+  }
+
+  async translateBatch(request: BatchTranslationRequest): Promise<BatchTranslationResponse> {
+    // Gemini는 배치 API가 없으므로 순차 처리
+    // 성능 최적화를 위해 여러 텍스트를 하나의 프롬프트로 묶음
+    const batchPrompt = this.buildBatchTranslationPrompt(
+      request.texts,
+      request.sourceLang,
+      request.targetLang
+    );
+
+    const url = `${this.apiUrl}?key=${this.apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: batchPrompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorMessage = await this.extractErrorMessage(response, 'Gemini batch error');
+      const apiError = createApiError(response.status, errorMessage, 'gemini-llm');
+      Logger.error('GeminiLLM', `Batch translation failed - ${diagnoseApiError(apiError)}`);
+      throw apiError;
+    }
+
+    const data = await response.json();
+    const translations = this.extractBatchTranslations(data, request.texts.length);
+
+    return {
+      translations,
+      engine: 'gemini-llm',
+    };
+  }
+
+  private buildTranslationPrompt(text: string, sourceLang: string, targetLang: string): string {
+    const sourceName = this.getLangName(sourceLang);
+    const targetName = this.getLangName(targetLang);
+
+    return `Translate the following ${sourceName} text to ${targetName}.
+Rules:
+- Translate naturally, preserving the original tone and nuance
+- Do NOT add any explanations, notes, or alternatives
+- Do NOT include the original text in your response
+- Output ONLY the translated text, nothing else
+
+Text to translate:
+${text}`;
+  }
+
+  private buildBatchTranslationPrompt(texts: string[], sourceLang: string, targetLang: string): string {
+    const sourceName = this.getLangName(sourceLang);
+    const targetName = this.getLangName(targetLang);
+
+    const numberedTexts = texts.map((t, i) => `[${i + 1}] ${t}`).join('\n');
+
+    return `Translate each numbered ${sourceName} text below to ${targetName}.
+Rules:
+- Translate naturally, preserving the original tone and nuance
+- Output ONLY the translations in the same numbered format
+- Do NOT add explanations or include original text
+- Keep the exact same numbering format: [1], [2], etc.
+
+Texts to translate:
+${numberedTexts}`;
+  }
+
+  private extractTranslation(data: unknown): string | null {
+    try {
+      const response = data as {
+        candidates?: Array<{
+          content?: {
+            parts?: Array<{ text?: string }>;
+          };
+        }>;
+      };
+      return response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private extractBatchTranslations(data: unknown, expectedCount: number): string[] {
+    const rawText = this.extractTranslation(data);
+    if (!rawText) {
+      return new Array(expectedCount).fill('');
+    }
+
+    // [1], [2] 형식으로 파싱
+    const translations: string[] = [];
+    const lines = rawText.split('\n');
+
+    for (let i = 1; i <= expectedCount; i++) {
+      const pattern = new RegExp(`^\\[${i}\\]\\s*(.*)$`);
+      let found = false;
+
+      for (const line of lines) {
+        const match = line.match(pattern);
+        if (match) {
+          translations.push(match[1].trim());
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        // 번호를 찾지 못하면 순서대로 매핑 시도
+        const cleanLine = lines[i - 1]?.replace(/^\[\d+\]\s*/, '').trim();
+        translations.push(cleanLine || '');
+      }
+    }
+
+    return translations;
+  }
+
+  private getLangName(code: string): string {
+    const names: Record<string, string> = {
+      en: 'English', ko: 'Korean', ja: 'Japanese', zh: 'Chinese',
+      es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
+      pt: 'Portuguese', ru: 'Russian', pl: 'Polish', nl: 'Dutch',
+    };
+    return names[code.toLowerCase()] || code;
+  }
+
+  private async extractErrorMessage(response: Response, defaultMsg: string): Promise<string> {
+    try {
+      const errorData = await response.json();
+      return errorData.error?.message || `${defaultMsg}: ${response.status}`;
+    } catch {
+      return `${defaultMsg}: ${response.status}`;
+    }
   }
 }
 
@@ -255,12 +412,23 @@ export class TranslationManager {
   configure(settings: Settings): void {
     this.engines.clear();
 
+    // DeepL
     if (settings.deeplApiKey) {
       this.engines.set('deepl', new DeepL(settings.deeplApiKey, settings.deeplIsFree));
     }
-    if (settings.microsoftApiKey) {
-      this.engines.set('microsoft', new Microsoft(settings.microsoftApiKey, settings.microsoftRegion));
+
+    // Google NMT
+    if (settings.googleApiKey) {
+      this.engines.set('google-nmt', new GoogleNMT(settings.googleApiKey));
     }
+
+    // Gemini LLM (geminiApiKey 우선, 없으면 googleApiKey 사용)
+    const geminiKey = settings.geminiApiKey || settings.googleApiKey;
+    if (geminiKey) {
+      this.engines.set('gemini-llm', new GeminiLLM(geminiKey));
+    }
+
+    Logger.info('TranslationManager', `Configured engines: ${Array.from(this.engines.keys()).join(', ')}`);
   }
 
   private getEngine(engine: TranslationEngine): ITranslationEngine {
@@ -282,5 +450,9 @@ export class TranslationManager {
   isConfigured(engine: TranslationEngine): boolean {
     const translator = this.engines.get(engine);
     return translator?.isConfigured() ?? false;
+  }
+
+  getConfiguredEngines(): TranslationEngine[] {
+    return Array.from(this.engines.keys()).filter(e => this.isConfigured(e));
   }
 }
