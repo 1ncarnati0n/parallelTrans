@@ -1,8 +1,7 @@
 /**
  * Translation Engines
  * - DeepL: NMT (Neural Machine Translation)
- * - Google NMT: Google Cloud Translation API v2
- * - Gemini LLM: Google Gemini API for context-aware translation
+ * - Groq LLM: Groq API (LPU-based ultra-fast LLM translation)
  */
 
 import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, TranslationEngine, Settings } from './types';
@@ -33,7 +32,6 @@ export class DeepL implements ITranslationEngine {
 
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
     const params = new URLSearchParams({
-      auth_key: this.apiKey,
       text: request.text,
       source_lang: this.mapLang(request.sourceLang),
       target_lang: this.mapLang(request.targetLang),
@@ -41,7 +39,10 @@ export class DeepL implements ITranslationEngine {
 
     const response = await fetch(this.apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `DeepL-Auth-Key ${this.apiKey}`,
+      },
       body: params.toString(),
     });
 
@@ -66,7 +67,6 @@ export class DeepL implements ITranslationEngine {
 
   async translateBatch(request: BatchTranslationRequest): Promise<BatchTranslationResponse> {
     const params = new URLSearchParams({
-      auth_key: this.apiKey,
       source_lang: this.mapLang(request.sourceLang),
       target_lang: this.mapLang(request.targetLang),
     });
@@ -76,7 +76,10 @@ export class DeepL implements ITranslationEngine {
 
     const response = await fetch(this.apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `DeepL-Auth-Key ${this.apiKey}`,
+      },
       body: params.toString(),
     });
 
@@ -121,107 +124,11 @@ export class DeepL implements ITranslationEngine {
   }
 }
 
-// ============== Google Cloud Translation API v2 (NMT) ==============
-export class GoogleNMT implements ITranslationEngine {
-  private apiUrl = 'https://translation.googleapis.com/language/translate/v2';
+// ============== Groq API (OpenAI-compatible LLM Translation) ==============
+export class GroqLLM implements ITranslationEngine {
+  private apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
   private apiKey: string;
-
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-  }
-
-  isConfigured(): boolean {
-    return Boolean(this.apiKey?.trim());
-  }
-
-  async translate(request: TranslationRequest): Promise<TranslationResponse> {
-    const url = `${this.apiUrl}?key=${this.apiKey}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        q: request.text,
-        source: this.mapLang(request.sourceLang),
-        target: this.mapLang(request.targetLang),
-        format: 'text',
-      }),
-    });
-
-    if (!response.ok) {
-      const errorMessage = await this.extractErrorMessage(response, 'Google NMT error');
-      const apiError = createApiError(response.status, errorMessage, 'google-nmt');
-      Logger.error('GoogleNMT', `Translation failed - ${diagnoseApiError(apiError)}`);
-      throw apiError;
-    }
-
-    const data = await response.json();
-
-    if (!data.data?.translations?.[0]?.translatedText) {
-      throw createApiError(response.status, 'Invalid response format from Google NMT', 'google-nmt', data);
-    }
-
-    return {
-      translatedText: data.data.translations[0].translatedText,
-      engine: 'google-nmt',
-    };
-  }
-
-  async translateBatch(request: BatchTranslationRequest): Promise<BatchTranslationResponse> {
-    const url = `${this.apiUrl}?key=${this.apiKey}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        q: request.texts,
-        source: this.mapLang(request.sourceLang),
-        target: this.mapLang(request.targetLang),
-        format: 'text',
-      }),
-    });
-
-    if (!response.ok) {
-      const errorMessage = await this.extractErrorMessage(response, 'Google NMT batch error');
-      const apiError = createApiError(response.status, errorMessage, 'google-nmt');
-      Logger.error('GoogleNMT', `Batch translation failed - ${diagnoseApiError(apiError)}`);
-      throw apiError;
-    }
-
-    const data = await response.json();
-
-    if (!data.data?.translations || !Array.isArray(data.data.translations)) {
-      throw createApiError(response.status, 'Invalid batch response format from Google NMT', 'google-nmt', data);
-    }
-
-    return {
-      translations: data.data.translations.map((t: { translatedText: string }) => t.translatedText),
-      engine: 'google-nmt',
-    };
-  }
-
-  private mapLang(lang: string): string {
-    const map: Record<string, string> = {
-      'zh': 'zh-CN',
-      'zh-tw': 'zh-TW',
-    };
-    return map[lang.toLowerCase()] || lang.toLowerCase();
-  }
-
-  private async extractErrorMessage(response: Response, defaultMsg: string): Promise<string> {
-    try {
-      const errorData = await response.json();
-      return errorData.error?.message || `${defaultMsg}: ${response.status}`;
-    } catch {
-      return `${defaultMsg}: ${response.status}`;
-    }
-  }
-}
-
-// ============== Google Gemini API (LLM-based Translation) ==============
-export class GeminiLLM implements ITranslationEngine {
-  private apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-  private apiKey: string;
+  private model = 'llama-3.3-70b-versatile';
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -233,76 +140,94 @@ export class GeminiLLM implements ITranslationEngine {
 
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
     const prompt = this.buildTranslationPrompt(request.text, request.sourceLang, request.targetLang);
-    const url = `${this.apiUrl}?key=${this.apiKey}`;
 
-    const response = await fetch(url, {
+    const response = await fetch(this.apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.1, // 번역은 창의성보다 정확성 중시
-          maxOutputTokens: 2048,
-        },
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional translator. Follow the user\'s translation instructions exactly.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 2048,
       }),
     });
 
     if (!response.ok) {
-      const errorMessage = await this.extractErrorMessage(response, 'Gemini error');
-      const apiError = createApiError(response.status, errorMessage, 'gemini-llm');
-      Logger.error('GeminiLLM', `Translation failed - ${diagnoseApiError(apiError)}`);
+      const errorMessage = await this.extractErrorMessage(response, 'Groq error');
+      const apiError = createApiError(response.status, errorMessage, 'groq-llm');
+      Logger.error('GroqLLM', `Translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
-    const translatedText = this.extractTranslation(data);
+    const translatedText = data.choices?.[0]?.message?.content?.trim() || null;
 
     if (!translatedText) {
-      throw createApiError(response.status, 'Invalid response format from Gemini', 'gemini-llm', data);
+      throw createApiError(response.status, 'Invalid response format from Groq', 'groq-llm', data);
     }
 
     return {
       translatedText,
-      engine: 'gemini-llm',
+      engine: 'groq-llm',
     };
   }
 
   async translateBatch(request: BatchTranslationRequest): Promise<BatchTranslationResponse> {
-    // Gemini는 배치 API가 없으므로 순차 처리
-    // 성능 최적화를 위해 여러 텍스트를 하나의 프롬프트로 묶음
     const batchPrompt = this.buildBatchTranslationPrompt(
       request.texts,
       request.sourceLang,
       request.targetLang
     );
 
-    const url = `${this.apiUrl}?key=${this.apiKey}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(this.apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: batchPrompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-        },
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional translator. Follow the user\'s translation instructions exactly.',
+          },
+          {
+            role: 'user',
+            content: batchPrompt,
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 8192,
       }),
     });
 
     if (!response.ok) {
-      const errorMessage = await this.extractErrorMessage(response, 'Gemini batch error');
-      const apiError = createApiError(response.status, errorMessage, 'gemini-llm');
-      Logger.error('GeminiLLM', `Batch translation failed - ${diagnoseApiError(apiError)}`);
+      const errorMessage = await this.extractErrorMessage(response, 'Groq batch error');
+      const apiError = createApiError(response.status, errorMessage, 'groq-llm');
+      Logger.error('GroqLLM', `Batch translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
     const data = await response.json();
-    const translations = this.extractBatchTranslations(data, request.texts.length);
+    const rawText = data.choices?.[0]?.message?.content?.trim() || null;
+    const translations = this.extractBatchTranslations(rawText, request.texts.length);
 
     return {
       translations,
-      engine: 'gemini-llm',
+      engine: 'groq-llm',
     };
   }
 
@@ -324,7 +249,6 @@ ${text}`;
   private buildBatchTranslationPrompt(texts: string[], sourceLang: string, targetLang: string): string {
     const sourceName = this.getLangName(sourceLang);
     const targetName = this.getLangName(targetLang);
-
     const numberedTexts = texts.map((t, i) => `[${i + 1}] ${t}`).join('\n');
 
     return `Translate each numbered ${sourceName} text below to ${targetName}.
@@ -338,28 +262,11 @@ Texts to translate:
 ${numberedTexts}`;
   }
 
-  private extractTranslation(data: unknown): string | null {
-    try {
-      const response = data as {
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{ text?: string }>;
-          };
-        }>;
-      };
-      return response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
-    } catch {
-      return null;
-    }
-  }
-
-  private extractBatchTranslations(data: unknown, expectedCount: number): string[] {
-    const rawText = this.extractTranslation(data);
+  private extractBatchTranslations(rawText: string | null, expectedCount: number): string[] {
     if (!rawText) {
       return new Array(expectedCount).fill('');
     }
 
-    // [1], [2] 형식으로 파싱
     const translations: string[] = [];
     const lines = rawText.split('\n');
 
@@ -377,7 +284,6 @@ ${numberedTexts}`;
       }
 
       if (!found) {
-        // 번호를 찾지 못하면 순서대로 매핑 시도
         const cleanLine = lines[i - 1]?.replace(/^\[\d+\]\s*/, '').trim();
         translations.push(cleanLine || '');
       }
@@ -417,15 +323,9 @@ export class TranslationManager {
       this.engines.set('deepl', new DeepL(settings.deeplApiKey, settings.deeplIsFree));
     }
 
-    // Google NMT
-    if (settings.googleApiKey) {
-      this.engines.set('google-nmt', new GoogleNMT(settings.googleApiKey));
-    }
-
-    // Gemini LLM (geminiApiKey 우선, 없으면 googleApiKey 사용)
-    const geminiKey = settings.geminiApiKey || settings.googleApiKey;
-    if (geminiKey) {
-      this.engines.set('gemini-llm', new GeminiLLM(geminiKey));
+    // Groq LLM
+    if (settings.groqApiKey) {
+      this.engines.set('groq-llm', new GroqLLM(settings.groqApiKey));
     }
 
     Logger.info('TranslationManager', `Configured engines: ${Array.from(this.engines.keys()).join(', ')}`);

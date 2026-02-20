@@ -11,8 +11,8 @@ const els = {
   // DeepL
   deeplKey: document.getElementById('deeplKey') as HTMLInputElement,
   deeplIsFree: document.getElementById('deeplIsFree') as HTMLInputElement,
-  // Google
-  googleKey: document.getElementById('googleKey') as HTMLInputElement,
+  // Groq
+  groqKey: document.getElementById('groqKey') as HTMLInputElement,
   // Settings
   sourceLang: document.getElementById('sourceLang') as HTMLSelectElement,
   targetLang: document.getElementById('targetLang') as HTMLSelectElement,
@@ -47,8 +47,8 @@ function updateUI(settings: Settings) {
   els.deeplKey.value = settings.deeplApiKey || '';
   els.deeplIsFree.checked = settings.deeplIsFree !== false;
 
-  // Google
-  els.googleKey.value = settings.googleApiKey || '';
+  // Groq
+  els.groqKey.value = settings.groqApiKey || '';
 
   // Settings
   els.sourceLang.value = settings.sourceLang;
@@ -65,17 +65,16 @@ function updateUI(settings: Settings) {
  */
 function highlightRequiredEngine(engine: TranslationEngine): void {
   const deeplSection = document.getElementById('deeplSection');
-  const googleSection = document.getElementById('googleSection');
+  const groqSection = document.getElementById('groqSection');
 
   // 모든 섹션 초기화
   deeplSection?.classList.remove('collapsed');
-  googleSection?.classList.remove('collapsed');
+  groqSection?.classList.remove('collapsed');
 
   // 선택되지 않은 엔진 접기
   if (engine === 'deepl') {
-    googleSection?.classList.add('collapsed');
-  } else {
-    // google-nmt 또는 gemini-llm은 모두 Google API 키 필요
+    groqSection?.classList.add('collapsed');
+  } else if (engine === 'groq-llm') {
     deeplSection?.classList.add('collapsed');
   }
 }
@@ -89,13 +88,13 @@ function checkApiKeyStatus(settings: Settings): void {
 
   if (engine === 'deepl') {
     hasRequiredKey = Boolean(settings.deeplApiKey?.trim());
-  } else {
-    // google-nmt 또는 gemini-llm
-    hasRequiredKey = Boolean(settings.googleApiKey?.trim());
+  } else if (engine === 'groq-llm') {
+    hasRequiredKey = Boolean(settings.groqApiKey?.trim());
   }
 
   if (!hasRequiredKey) {
-    const engineName = engine === 'deepl' ? 'DeepL' : 'Google';
+    let engineName = 'DeepL';
+    if (engine === 'groq-llm') engineName = 'Groq';
     showStatus(`Please enter your ${engineName} API key`, 'error');
   }
 }
@@ -117,7 +116,7 @@ async function handleSave() {
 
     // API 키 검증
     const deeplKey = els.deeplKey.value.trim();
-    const googleKey = els.googleKey.value.trim();
+    const groqKey = els.groqKey.value.trim();
 
     // 선택된 엔진에 필요한 API 키 확인
     if (engine === 'deepl' && !deeplKey) {
@@ -126,8 +125,8 @@ async function handleSave() {
       return;
     }
 
-    if ((engine === 'google-nmt' || engine === 'gemini-llm') && !googleKey) {
-      showStatus('Please enter your Google API key', 'error');
+    if (engine === 'groq-llm' && !groqKey) {
+      showStatus('Please enter your Groq API key', 'error');
       els.saveBtn.disabled = false;
       return;
     }
@@ -138,9 +137,8 @@ async function handleSave() {
       // DeepL
       deeplApiKey: deeplKey,
       deeplIsFree: els.deeplIsFree.checked,
-      // Google (NMT + Gemini)
-      googleApiKey: googleKey,
-      geminiApiKey: googleKey, // 같은 키 사용
+      // Groq
+      groqApiKey: groqKey,
       // Settings
       sourceLang: els.sourceLang.value,
       targetLang: els.targetLang.value,
@@ -186,8 +184,7 @@ async function loadStats() {
 function getEngineName(engine: TranslationEngine): string {
   const names: Record<TranslationEngine, string> = {
     'deepl': 'DeepL (NMT)',
-    'google-nmt': 'Google (NMT)',
-    'gemini-llm': 'Gemini (LLM)',
+    'groq-llm': 'Groq (LLM)',
   };
   return names[engine] || engine;
 }

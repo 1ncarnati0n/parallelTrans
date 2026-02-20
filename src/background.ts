@@ -27,12 +27,11 @@ function getDefaultSettings(): Settings {
     // API Keys
     deeplApiKey: CONSTANTS.DEFAULT_DEEPL_API_KEY,
     deeplIsFree: true,
-    googleApiKey: CONSTANTS.DEFAULT_GOOGLE_API_KEY,
-    geminiApiKey: CONSTANTS.DEFAULT_GEMINI_API_KEY,
+    groqApiKey: CONSTANTS.DEFAULT_GROQ_API_KEY,
     // Translation Settings
     sourceLang: 'en',
     targetLang: 'ko',
-    primaryEngine: 'google-nmt', // 기본 엔진
+    primaryEngine: 'groq-llm', // 기본 엔진
     displayMode: 'parallel',
     cacheEnabled: true,
     viewportTranslation: true,
@@ -47,6 +46,13 @@ async function initialize() {
     if (stored) {
       settings = { ...defaults, ...stored }; // 새 필드 추가 시 기본값 병합
 
+      // 마이그레이션 가드: 삭제된 엔진(google-nmt, gemini-llm) → deepl 자동 전환
+      const validEngines: TranslationEngine[] = ['deepl', 'groq-llm'];
+      if (!validEngines.includes(settings.primaryEngine)) {
+        Logger.info('Background', `삭제된 엔진 '${settings.primaryEngine}' → 'groq-llm'으로 마이그레이션`);
+        settings.primaryEngine = 'groq-llm';
+      }
+
       // 환경변수 API 키가 있으면 저장된 빈 키를 덮어씀 (개발 편의성)
       let needsUpdate = false;
 
@@ -56,16 +62,10 @@ async function initialize() {
         Logger.info('Background', 'DeepL API 키가 환경변수에서 로드됨');
       }
 
-      if (defaults.googleApiKey && !settings.googleApiKey) {
-        settings.googleApiKey = defaults.googleApiKey;
+      if (defaults.groqApiKey && !settings.groqApiKey) {
+        settings.groqApiKey = defaults.groqApiKey;
         needsUpdate = true;
-        Logger.info('Background', 'Google API 키가 환경변수에서 로드됨');
-      }
-
-      if (defaults.geminiApiKey && !settings.geminiApiKey) {
-        settings.geminiApiKey = defaults.geminiApiKey;
-        needsUpdate = true;
-        Logger.info('Background', 'Gemini API 키가 환경변수에서 로드됨');
+        Logger.info('Background', 'Groq API 키가 환경변수에서 로드됨');
       }
 
       if (needsUpdate) {

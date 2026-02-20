@@ -55,17 +55,17 @@ export const CONSTANTS = {
 
   // Rate Limiting (ms)
   RATE_LIMIT_DEEPL: 100,
-  RATE_LIMIT_GOOGLE: 50,
-  RATE_LIMIT_GEMINI: 200, // LLM은 더 느리므로 여유 있게
 
   // 재시도 설정
   MAX_RETRY_COUNT: 3,
   RETRY_DELAY_MS: 1000,
 
+  // Rate Limiting - Groq
+  RATE_LIMIT_GROQ: 200, // LPU 기반이지만 API 레이트 리밋 고려
+
   // API 기본 키 (.env에서 자동 로드)
   DEFAULT_DEEPL_API_KEY: process.env.DEEPL_API_KEY || '',
-  DEFAULT_GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || '',
-  DEFAULT_GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+  DEFAULT_GROQ_API_KEY: process.env.GROQ_API_KEY || '',
 
   // 블록 레벨 요소
   BLOCK_ELEMENTS: ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'FIGCAPTION'],
@@ -78,18 +78,16 @@ export const CONSTANTS = {
 /**
  * 번역 엔진 타입
  * - deepl: DeepL API (NMT - Neural Machine Translation)
- * - google-nmt: Google Cloud Translation API (NMT)
- * - gemini-llm: Google Gemini API (LLM-based translation)
+ * - groq-llm: Groq API (LPU-based ultra-fast LLM translation)
  */
-export type TranslationEngine = 'deepl' | 'google-nmt' | 'gemini-llm';
+export type TranslationEngine = 'deepl' | 'groq-llm';
 export type DisplayMode = 'parallel' | 'translation-only';
 export type TriggerMode = 'auto' | 'manual';
 
 // 엔진 메타데이터
 export const ENGINE_INFO: Record<TranslationEngine, { name: string; type: 'nmt' | 'llm'; description: string }> = {
   'deepl': { name: 'DeepL', type: 'nmt', description: 'High quality NMT, fast' },
-  'google-nmt': { name: 'Google Translate', type: 'nmt', description: 'Broad language support, very fast' },
-  'gemini-llm': { name: 'Gemini', type: 'llm', description: 'Context-aware LLM translation' },
+  'groq-llm': { name: 'Groq', type: 'llm', description: 'Ultra-fast LPU-based LLM translation' },
 };
 
 // ============== 번역 요청/응답 ==============
@@ -121,8 +119,7 @@ export interface Settings {
   // API Keys
   deeplApiKey: string;
   deeplIsFree: boolean; // DeepL Free vs Pro
-  googleApiKey: string; // Google Cloud Translation & Gemini 공용
-  geminiApiKey: string; // Gemini 전용 (선택)
+  groqApiKey: string;   // Groq API 키
   // Translation Settings
   sourceLang: string;
   targetLang: string;

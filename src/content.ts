@@ -26,6 +26,7 @@ interface RetryItem extends PendingText {
 let settings: Settings | null = null;
 let isActive = false;
 let isProcessing = false; // Race condition 방지
+let isContextInvalidated = false; // 확장 컨텍스트 무효화 감지
 
 // 번역된 텍스트 노드 추적 (부모 요소 + 텍스트 내용 기반)
 // LRU 방식으로 메모리 관리
@@ -65,11 +66,10 @@ async function initSettings(): Promise<void> {
     enabled: true,
     deeplApiKey: '',
     deeplIsFree: true,
-    googleApiKey: '',
-    geminiApiKey: '',
+    groqApiKey: '',
     sourceLang: 'en',
     targetLang: 'ko',
-    primaryEngine: 'google-nmt',
+    primaryEngine: 'groq-llm',
     displayMode: 'parallel',
     cacheEnabled: true,
     viewportTranslation: true,
@@ -101,6 +101,20 @@ async function init() {
   } catch (error) {
     console.error('[ParallelTrans] Init error:', error);
   }
+}
+
+// ============== 컨텍스트 검증 ==============
+function isContextValid(): boolean {
+  return !isContextInvalidated && Boolean(chrome.runtime?.id);
+}
+
+function handleContextInvalidated(): void {
+  if (isContextInvalidated) return;
+  isContextInvalidated = true;
+  isActive = false;
+  console.warn('[ParallelTrans] Extension context invalidated — 페이지를 새로고침해 주세요.');
+  styleManager.showToast('🔄 확장이 업데이트됨 — 페이지를 새로고침해 주세요');
+  cleanup();
 }
 
 // ============== 정리 ==============
@@ -348,6 +362,7 @@ function addPendingText(node: Text, text: string, originalText: string, startInd
 }
 
 function scheduleProcessing() {
+  if (!isContextValid()) return;
   if (!hydrationSettled) return;
   if (processingTimer !== null) return;
 
@@ -361,6 +376,7 @@ function scheduleProcessing() {
  * Race condition 방지를 위한 처리
  */
 async function processPendingTexts() {
+  if (!isContextValid()) return;
   if (!hydrationSettled) return;
   if (!settings) {
     console.warn('[ParallelTrans] Settings not ready for processing');
@@ -429,6 +445,10 @@ async function processPendingTexts() {
           addToRetryQueue(batch);
         }
       } catch (error) {
+        if (String(error).includes('Extension context invalidated')) {
+          handleContextInvalidated();
+          return;
+        }
         console.warn('[ParallelTrans] Batch error:', error);
         // 실패한 배치를 재시도 큐에 추가
         addToRetryQueue(batch);
@@ -470,6 +490,7 @@ function addToRetryQueue(batch: PendingText[]): void {
  * 재시도 처리 스케줄링
  */
 function scheduleRetryProcessing(): void {
+  if (!isContextValid()) return;
   if (retryQueue.length === 0) return;
   if (retryTimer !== null) return;
 

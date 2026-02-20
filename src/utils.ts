@@ -170,7 +170,7 @@ export class TranslationCache {
       }
     } else {
       // 엔진이 지정되지 않으면 모든 엔진 검색
-      for (const eng of ['deepl', 'google-nmt', 'gemini-llm'] as TranslationEngine[]) {
+      for (const eng of ['deepl', 'groq-llm'] as TranslationEngine[]) {
         const key = this.getCacheKey(text, sourceLang, targetLang, eng);
         const entry = this.cache.get(key);
         if (entry && Date.now() - entry.timestamp <= this.maxAge) {
@@ -222,20 +222,17 @@ export class TranslationCache {
 /**
  * API 호출 속도 제한
  * - DeepL: 100ms 간격 (Free API 제한)
- * - Google NMT: 50ms 간격 (빠름)
- * - Gemini LLM: 200ms 간격 (LLM은 처리 시간이 더 필요)
+ * - Groq LLM: 200ms 간격 (API 레이트 리밋 고려)
  */
 export class RateLimiter {
   private lastRequestTime: Record<TranslationEngine, number> = {
     'deepl': 0,
-    'google-nmt': 0,
-    'gemini-llm': 0,
+    'groq-llm': 0,
   };
 
   private minInterval: Record<TranslationEngine, number> = {
     'deepl': CONSTANTS.RATE_LIMIT_DEEPL,
-    'google-nmt': CONSTANTS.RATE_LIMIT_GOOGLE,
-    'gemini-llm': CONSTANTS.RATE_LIMIT_GEMINI,
+    'groq-llm': CONSTANTS.RATE_LIMIT_GROQ,
   };
 
   async waitForSlot(engine: TranslationEngine): Promise<void> {
@@ -253,15 +250,8 @@ export class RateLimiter {
     this.lastRequestTime[engine] = Date.now();
   }
 
-  async waitForBatch(engine: TranslationEngine, totalChars: number): Promise<void> {
+  async waitForBatch(engine: TranslationEngine, _totalChars: number): Promise<void> {
     await this.waitForSlot(engine);
-
-    // Gemini LLM은 큰 배치에서 추가 대기 시간 필요 (토큰 처리 시간)
-    if (engine === 'gemini-llm' && totalChars > 1000) {
-      const extraWait = Math.min(totalChars / 100, 500); // 최대 500ms
-      Logger.debug('RateLimiter', `Gemini 배치 크기로 인한 추가 대기: ${extraWait}ms`);
-      await new Promise(resolve => setTimeout(resolve, extraWait));
-    }
   }
 }
 

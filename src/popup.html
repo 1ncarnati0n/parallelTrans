@@ -6,33 +6,110 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* ===== Theme Tokens ===== */
+    :root {
+      --bg: #f0f1f5;
+      --container-bg: #ffffff;
+      --container-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      --text: #333333;
+      --text-sub: #666666;
+      --text-muted: #999999;
+      --accent: #667eea;
+      --accent-focus-shadow: rgba(102, 126, 234, 0.15);
+      --accent-hover-shadow: rgba(102, 126, 234, 0.4);
+      --border: #dddddd;
+      --divider: #eeeeee;
+      --input-bg: #ffffff;
+      --toggle-off: #cccccc;
+      --toggle-knob: #ffffff;
+      --engine-bg: #f9f9f9;
+      --engine-collapsed-bg: #fafafa;
+      --engine-border: transparent;
+      --engine-header-text: #444444;
+      --badge-nmt-bg: #e3f2fd;
+      --badge-nmt-text: #1565c0;
+      --badge-llm-bg: #fce4ec;
+      --badge-llm-text: #c2185b;
+      --stats-bg: transparent;
+      --btn-disabled-bg: #cccccc;
+      --btn-disabled-text: #888888;
+      --success-bg: #d4edda;
+      --success-text: #155724;
+      --success-border: #28a745;
+      --error-bg: #f8d7da;
+      --error-text: #721c24;
+      --error-border: #dc3545;
+      --engine-select-bg: #f5f5ff;
+      --h1-color: #667eea;
+      --h2-color: #333333;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1b2e;
+        --container-bg: #232438;
+        --container-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        --text: #e2e4eb;
+        --text-sub: #8a8eb0;
+        --text-muted: #6b6f8d;
+        --accent: #6c72cb;
+        --accent-focus-shadow: rgba(108, 114, 203, 0.2);
+        --accent-hover-shadow: rgba(108, 114, 203, 0.4);
+        --border: #3a3d5c;
+        --divider: #2e3050;
+        --input-bg: #1a1b2e;
+        --toggle-off: #3a3d5c;
+        --toggle-knob: #e2e4eb;
+        --engine-bg: #1e1f34;
+        --engine-collapsed-bg: #1c1d30;
+        --engine-border: #2e3050;
+        --engine-header-text: #c5c8e8;
+        --badge-nmt-bg: rgba(56, 132, 255, 0.15);
+        --badge-nmt-text: #58a6ff;
+        --badge-llm-bg: rgba(219, 97, 162, 0.15);
+        --badge-llm-text: #db61a2;
+        --stats-bg: #1a1b2e;
+        --btn-disabled-bg: #3a3d5c;
+        --btn-disabled-text: #6b6f8d;
+        --success-bg: rgba(46, 160, 67, 0.15);
+        --success-text: #56d364;
+        --success-border: #2ea043;
+        --error-bg: rgba(248, 81, 73, 0.15);
+        --error-text: #f85149;
+        --error-border: #da3633;
+        --engine-select-bg: #1e1f34;
+        --h1-color: #a5a9f6;
+        --h2-color: #b0b3d6;
+      }
+    }
+
+    /* ===== Base ===== */
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       width: 450px;
       padding: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      color: #333;
+      background: var(--bg);
+      color: var(--text);
     }
 
     .container {
-      background: white;
+      background: var(--container-bg);
       border-radius: 12px;
       padding: 20px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--container-shadow);
     }
 
     h1 {
       font-size: 20px;
       margin-bottom: 8px;
-      color: #667eea;
+      color: var(--h1-color);
     }
 
     .subtitle {
       font-size: 12px;
-      color: #999;
+      color: var(--text-muted);
       margin-bottom: 20px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--divider);
       padding-bottom: 12px;
     }
 
@@ -40,7 +117,7 @@
       font-size: 14px;
       font-weight: 600;
       margin: 20px 0 12px;
-      color: #333;
+      color: var(--h2-color);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -50,39 +127,132 @@
       margin: 10px 0 4px;
       font-size: 12px;
       font-weight: 500;
-      color: #666;
+      color: var(--text-sub);
     }
 
+    /* ===== Inputs & Selects ===== */
     input, select {
       width: 100%;
       padding: 10px 12px;
       margin-bottom: 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 13px;
       font-family: inherit;
+      background: var(--input-bg);
+      color: var(--text);
       transition: all 0.2s;
     }
 
     input:focus, select:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-focus-shadow);
     }
 
-    input[type="checkbox"] {
-      width: auto;
-      margin-right: 8px;
+    input[type="password"] {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      letter-spacing: 1px;
+    }
+
+    select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
       cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
     }
 
-    .checkbox-label {
+    @media (prefers-color-scheme: dark) {
+      select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6f8d' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      }
+    }
+
+    /* ===== Enable Toggle Switch ===== */
+    .toggle-label {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       margin: 12px 0;
       cursor: pointer;
     }
 
+    .toggle-label span {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--toggle-off);
+      border-radius: 24px;
+      transition: background 0.3s;
+      cursor: pointer;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      top: 3px;
+      background: var(--toggle-knob);
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--accent);
+    }
+
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+    }
+
+    /* ===== Engine Select ===== */
+    #primaryEngine {
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 36px 12px 14px;
+      border: 1px solid var(--accent);
+      border-left: 3px solid var(--accent);
+      background-color: var(--engine-select-bg);
+      color: var(--accent);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23667eea' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    }
+
+    @media (prefers-color-scheme: dark) {
+      #primaryEngine {
+        color: #a5a9f6;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236c72cb' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      }
+    }
+
+    #primaryEngine:focus {
+      box-shadow: 0 0 0 3px var(--accent-focus-shadow);
+    }
+
+    /* ===== Save Button ===== */
     button {
       width: 100%;
       padding: 12px;
@@ -97,17 +267,25 @@
       transition: all 0.3s;
     }
 
+    @media (prefers-color-scheme: dark) {
+      button {
+        background: linear-gradient(135deg, #6c72cb 0%, #9b59b6 100%);
+      }
+    }
+
     button:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 5px 20px var(--accent-hover-shadow);
     }
 
     button:disabled {
-      background: #ccc;
+      background: var(--btn-disabled-bg);
+      color: var(--btn-disabled-text);
       cursor: not-allowed;
       transform: none;
     }
 
+    /* ===== Status Messages ===== */
     .status {
       padding: 10px 12px;
       margin-bottom: 12px;
@@ -118,17 +296,18 @@
     }
 
     .status.success {
-      background: #d4edda;
-      color: #155724;
-      border-left-color: #28a745;
+      background: var(--success-bg);
+      color: var(--success-text);
+      border-left-color: var(--success-border);
     }
 
     .status.error {
-      background: #f8d7da;
-      color: #721c24;
-      border-left-color: #dc3545;
+      background: var(--error-bg);
+      color: var(--error-text);
+      border-left-color: var(--error-border);
     }
 
+    /* ===== Grid Row ===== */
     .row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -143,31 +322,56 @@
       margin-bottom: 6px;
     }
 
+    /* ===== Stats ===== */
     #stats {
       font-size: 11px;
-      color: #999;
+      color: var(--text-muted);
       margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #eee;
+      padding: 12px;
+      background: var(--stats-bg);
+      border-radius: 6px;
       line-height: 1.6;
     }
 
+    @media (prefers-color-scheme: light) {
+      #stats {
+        padding-top: 16px;
+        border-top: 1px solid var(--divider);
+      }
+    }
+
+    #stats strong {
+      color: var(--accent);
+    }
+
+    /* ===== Help Text & Links ===== */
     .help-text {
       font-size: 11px;
-      color: #999;
+      color: var(--text-muted);
       margin-top: 4px;
       font-style: italic;
     }
 
+    .help-text a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .help-text a:hover {
+      text-decoration: underline;
+    }
+
+    /* ===== Engine Sections ===== */
     .engine-section {
-      background: #f9f9f9;
+      background: var(--engine-bg);
       padding: 12px;
       border-radius: 6px;
       margin-bottom: 12px;
+      border: 1px solid var(--engine-border);
     }
 
     .engine-section.collapsed {
-      background: #fafafa;
+      background: var(--engine-collapsed-bg);
     }
 
     .engine-section.collapsed .api-key-input {
@@ -184,7 +388,7 @@
     .engine-header h3 {
       font-size: 13px;
       font-weight: 600;
-      color: #444;
+      color: var(--engine-header-text);
     }
 
     .engine-badge {
@@ -195,24 +399,24 @@
     }
 
     .badge-nmt {
-      background: #e3f2fd;
-      color: #1565c0;
+      background: var(--badge-nmt-bg);
+      color: var(--badge-nmt-text);
     }
 
     .badge-llm {
-      background: #fce4ec;
-      color: #c2185b;
+      background: var(--badge-llm-bg);
+      color: var(--badge-llm-text);
     }
 
     .engine-status {
       font-size: 11px;
-      color: #999;
+      color: var(--text-muted);
       margin-top: 6px;
     }
 
     .toggle-icon {
       font-size: 12px;
-      color: #999;
+      color: var(--text-muted);
       transition: transform 0.2s;
     }
 
@@ -227,6 +431,27 @@
     .api-key-input input {
       margin-bottom: 4px;
     }
+
+    /* ===== Checkbox (DeepL Free) ===== */
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      margin: 4px 0;
+      cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+      margin-bottom: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .checkbox-label span {
+      font-size: 11px;
+      color: var(--text-sub);
+    }
   </style>
 </head>
 <body>
@@ -236,20 +461,22 @@
 
     <div id="status" class="status"></div>
 
-    <label class="checkbox-label">
-      <input type="checkbox" id="enabled">
+    <label class="toggle-label">
       <span>Enable Translation</span>
+      <div class="toggle-switch">
+        <input type="checkbox" id="enabled">
+        <span class="toggle-slider"></span>
+      </div>
     </label>
 
     <!-- Translation Engine Selection -->
     <h2>Translation Engine</h2>
     <select id="primaryEngine">
       <option value="deepl">DeepL (NMT) - High Quality</option>
-      <option value="google-nmt">Google Translate (NMT) - Fast</option>
-      <option value="gemini-llm">Gemini (LLM) - Context-Aware</option>
+      <option value="groq-llm">Groq (LLM) - Ultra Fast</option>
     </select>
     <div class="help-text">
-      NMT: Fast, consistent | LLM: Better context understanding, slower
+      DeepL: Fast, high quality NMT | Groq: Ultra-fast LPU-based LLM
     </div>
 
     <!-- API Keys -->
@@ -267,31 +494,30 @@
       <div class="api-key-input">
         <label>API Key</label>
         <input type="password" id="deeplKey" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx">
-        <label class="checkbox-label" style="margin-top: 4px;">
+        <label class="checkbox-label">
           <input type="checkbox" id="deeplIsFree" checked>
-          <span style="font-size: 11px;">Free API (api-free.deepl.com)</span>
+          <span>Free API (api-free.deepl.com)</span>
         </label>
         <div class="help-text">
-          <a href="https://www.deepl.com/pro-api" target="_blank" style="color: #667eea;">Get DeepL API Key</a> | Free: 500K chars/month
+          <a href="https://www.deepl.com/pro-api" target="_blank">Get DeepL API Key</a> | Free: 500K chars/month
         </div>
       </div>
     </div>
 
-    <!-- Google -->
-    <div class="engine-section" id="googleSection">
-      <div class="engine-header" onclick="toggleSection('googleSection')">
+    <!-- Groq -->
+    <div class="engine-section" id="groqSection">
+      <div class="engine-header" onclick="toggleSection('groqSection')">
         <div>
-          <h3>Google Cloud API</h3>
-          <span class="engine-badge badge-nmt">NMT</span>
+          <h3>Groq API</h3>
           <span class="engine-badge badge-llm">LLM</span>
         </div>
         <span class="toggle-icon">▼</span>
       </div>
       <div class="api-key-input">
-        <label>API Key (Translation + Gemini)</label>
-        <input type="password" id="googleKey" placeholder="AIza...">
+        <label>API Key</label>
+        <input type="password" id="groqKey" placeholder="gsk_...">
         <div class="help-text">
-          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: #667eea;">Get Google API Key</a> | Used for both NMT and Gemini
+          <a href="https://console.groq.com/keys" target="_blank">Get Groq API Key</a> | Free tier available, ultra-fast LPU inference
         </div>
       </div>
     </div>
