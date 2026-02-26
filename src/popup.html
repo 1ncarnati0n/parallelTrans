@@ -473,10 +473,10 @@
     <h2>Translation Engine</h2>
     <select id="primaryEngine">
       <option value="deepl">DeepL (NMT) - High Quality</option>
-      <option value="groq-llm">Groq (LLM) - Ultra Fast</option>
+      <option value="openrouter-llm">OpenRouter (LLM)</option>
     </select>
     <div class="help-text">
-      DeepL: Fast, high quality NMT | Groq: Ultra-fast LPU-based LLM
+      DeepL: Fast, high quality NMT | OpenRouter: Versatile LLMs
     </div>
 
     <!-- API Keys -->
@@ -504,20 +504,20 @@
       </div>
     </div>
 
-    <!-- Groq -->
-    <div class="engine-section" id="groqSection">
-      <div class="engine-header" onclick="toggleSection('groqSection')">
+    <!-- OpenRouter -->
+    <div class="engine-section" id="openRouterSection">
+      <div class="engine-header" onclick="toggleSection('openRouterSection')">
         <div>
-          <h3>Groq API</h3>
+          <h3>OpenRouter API</h3>
           <span class="engine-badge badge-llm">LLM</span>
         </div>
         <span class="toggle-icon">▼</span>
       </div>
       <div class="api-key-input">
         <label>API Key</label>
-        <input type="password" id="groqKey" placeholder="gsk_...">
+        <input type="password" id="openRouterKey" placeholder="sk-or-...">
         <div class="help-text">
-          <a href="https://console.groq.com/keys" target="_blank">Get Groq API Key</a> | Free tier available, ultra-fast LPU inference
+          <a href="https://openrouter.ai/settings/keys" target="_blank">Get OpenRouter API Key</a> | Access various models through one API
         </div>
       </div>
     </div>

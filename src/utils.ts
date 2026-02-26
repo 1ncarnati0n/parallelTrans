@@ -170,7 +170,7 @@ export class TranslationCache {
       }
     } else {
       // 엔진이 지정되지 않으면 모든 엔진 검색
-      for (const eng of ['deepl', 'groq-llm'] as TranslationEngine[]) {
+      for (const eng of ['deepl', 'openrouter-llm'] as TranslationEngine[]) {
         const key = this.getCacheKey(text, sourceLang, targetLang, eng);
         const entry = this.cache.get(key);
         if (entry && Date.now() - entry.timestamp <= this.maxAge) {
@@ -222,17 +222,17 @@ export class TranslationCache {
 /**
  * API 호출 속도 제한
  * - DeepL: 100ms 간격 (Free API 제한)
- * - Groq LLM: 200ms 간격 (API 레이트 리밋 고려)
+ * - OpenRouter LLM: 200ms 간격 (API 레이트 리밋 고려)
  */
 export class RateLimiter {
   private lastRequestTime: Record<TranslationEngine, number> = {
     'deepl': 0,
-    'groq-llm': 0,
+    'openrouter-llm': 0,
   };
 
   private minInterval: Record<TranslationEngine, number> = {
     'deepl': CONSTANTS.RATE_LIMIT_DEEPL,
-    'groq-llm': CONSTANTS.RATE_LIMIT_GROQ,
+    'openrouter-llm': CONSTANTS.RATE_LIMIT_OPENROUTER,
   };
 
   async waitForSlot(engine: TranslationEngine): Promise<void> {

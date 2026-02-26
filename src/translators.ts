@@ -1,7 +1,7 @@
 /**
  * Translation Engines
  * - DeepL: NMT (Neural Machine Translation)
- * - Groq LLM: Groq API (LPU-based ultra-fast LLM translation)
+ * - OpenRouter LLM: OpenRouter API (LLM translation)
  */
 
 import { TranslationRequest, BatchTranslationRequest, TranslationResponse, BatchTranslationResponse, TranslationEngine, Settings } from './types';
@@ -124,11 +124,11 @@ export class DeepL implements ITranslationEngine {
   }
 }
 
-// ============== Groq API (OpenAI-compatible LLM Translation) ==============
-export class GroqLLM implements ITranslationEngine {
-  private apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+// ============== OpenRouter API (OpenAI-compatible LLM Translation) ==============
+export class OpenRouterLLM implements ITranslationEngine {
+  private apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
   private apiKey: string;
-  private model = 'llama-3.3-70b-versatile';
+  private model = 'meta-llama/llama-3.3-70b-instruct';
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -165,9 +165,9 @@ export class GroqLLM implements ITranslationEngine {
     });
 
     if (!response.ok) {
-      const errorMessage = await this.extractErrorMessage(response, 'Groq error');
-      const apiError = createApiError(response.status, errorMessage, 'groq-llm');
-      Logger.error('GroqLLM', `Translation failed - ${diagnoseApiError(apiError)}`);
+      const errorMessage = await this.extractErrorMessage(response, 'OpenRouter error');
+      const apiError = createApiError(response.status, errorMessage, 'openrouter-llm');
+      Logger.error('OpenRouterLLM', `Translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
@@ -175,12 +175,12 @@ export class GroqLLM implements ITranslationEngine {
     const translatedText = data.choices?.[0]?.message?.content?.trim() || null;
 
     if (!translatedText) {
-      throw createApiError(response.status, 'Invalid response format from Groq', 'groq-llm', data);
+      throw createApiError(response.status, 'Invalid response format from OpenRouter', 'openrouter-llm', data);
     }
 
     return {
       translatedText,
-      engine: 'groq-llm',
+      engine: 'openrouter-llm',
     };
   }
 
@@ -215,9 +215,9 @@ export class GroqLLM implements ITranslationEngine {
     });
 
     if (!response.ok) {
-      const errorMessage = await this.extractErrorMessage(response, 'Groq batch error');
-      const apiError = createApiError(response.status, errorMessage, 'groq-llm');
-      Logger.error('GroqLLM', `Batch translation failed - ${diagnoseApiError(apiError)}`);
+      const errorMessage = await this.extractErrorMessage(response, 'OpenRouter batch error');
+      const apiError = createApiError(response.status, errorMessage, 'openrouter-llm');
+      Logger.error('OpenRouterLLM', `Batch translation failed - ${diagnoseApiError(apiError)}`);
       throw apiError;
     }
 
@@ -227,7 +227,7 @@ export class GroqLLM implements ITranslationEngine {
 
     return {
       translations,
-      engine: 'groq-llm',
+      engine: 'openrouter-llm',
     };
   }
 
@@ -323,9 +323,9 @@ export class TranslationManager {
       this.engines.set('deepl', new DeepL(settings.deeplApiKey, settings.deeplIsFree));
     }
 
-    // Groq LLM
-    if (settings.groqApiKey) {
-      this.engines.set('groq-llm', new GroqLLM(settings.groqApiKey));
+    // OpenRouter LLM
+    if (settings.openRouterApiKey) {
+      this.engines.set('openrouter-llm', new OpenRouterLLM(settings.openRouterApiKey));
     }
 
     Logger.info('TranslationManager', `Configured engines: ${Array.from(this.engines.keys()).join(', ')}`);

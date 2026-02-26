@@ -11,8 +11,8 @@ const els = {
   // DeepL
   deeplKey: document.getElementById('deeplKey') as HTMLInputElement,
   deeplIsFree: document.getElementById('deeplIsFree') as HTMLInputElement,
-  // Groq
-  groqKey: document.getElementById('groqKey') as HTMLInputElement,
+  // OpenRouter
+  openRouterKey: document.getElementById('openRouterKey') as HTMLInputElement,
   // Settings
   sourceLang: document.getElementById('sourceLang') as HTMLSelectElement,
   targetLang: document.getElementById('targetLang') as HTMLSelectElement,
@@ -47,8 +47,8 @@ function updateUI(settings: Settings) {
   els.deeplKey.value = settings.deeplApiKey || '';
   els.deeplIsFree.checked = settings.deeplIsFree !== false;
 
-  // Groq
-  els.groqKey.value = settings.groqApiKey || '';
+  // OpenRouter
+  els.openRouterKey.value = settings.openRouterApiKey || '';
 
   // Settings
   els.sourceLang.value = settings.sourceLang;
@@ -65,16 +65,16 @@ function updateUI(settings: Settings) {
  */
 function highlightRequiredEngine(engine: TranslationEngine): void {
   const deeplSection = document.getElementById('deeplSection');
-  const groqSection = document.getElementById('groqSection');
+  const openRouterSection = document.getElementById('openRouterSection');
 
   // 모든 섹션 초기화
   deeplSection?.classList.remove('collapsed');
-  groqSection?.classList.remove('collapsed');
+  openRouterSection?.classList.remove('collapsed');
 
   // 선택되지 않은 엔진 접기
   if (engine === 'deepl') {
-    groqSection?.classList.add('collapsed');
-  } else if (engine === 'groq-llm') {
+    openRouterSection?.classList.add('collapsed');
+  } else if (engine === 'openrouter-llm') {
     deeplSection?.classList.add('collapsed');
   }
 }
@@ -88,13 +88,13 @@ function checkApiKeyStatus(settings: Settings): void {
 
   if (engine === 'deepl') {
     hasRequiredKey = Boolean(settings.deeplApiKey?.trim());
-  } else if (engine === 'groq-llm') {
-    hasRequiredKey = Boolean(settings.groqApiKey?.trim());
+  } else if (engine === 'openrouter-llm') {
+    hasRequiredKey = Boolean(settings.openRouterApiKey?.trim());
   }
 
   if (!hasRequiredKey) {
     let engineName = 'DeepL';
-    if (engine === 'groq-llm') engineName = 'Groq';
+    if (engine === 'openrouter-llm') engineName = 'OpenRouter';
     showStatus(`Please enter your ${engineName} API key`, 'error');
   }
 }
@@ -116,7 +116,7 @@ async function handleSave() {
 
     // API 키 검증
     const deeplKey = els.deeplKey.value.trim();
-    const groqKey = els.groqKey.value.trim();
+    const openRouterKey = els.openRouterKey.value.trim();
 
     // 선택된 엔진에 필요한 API 키 확인
     if (engine === 'deepl' && !deeplKey) {
@@ -125,8 +125,8 @@ async function handleSave() {
       return;
     }
 
-    if (engine === 'groq-llm' && !groqKey) {
-      showStatus('Please enter your Groq API key', 'error');
+    if (engine === 'openrouter-llm' && !openRouterKey) {
+      showStatus('Please enter your OpenRouter API key', 'error');
       els.saveBtn.disabled = false;
       return;
     }
@@ -137,8 +137,8 @@ async function handleSave() {
       // DeepL
       deeplApiKey: deeplKey,
       deeplIsFree: els.deeplIsFree.checked,
-      // Groq
-      groqApiKey: groqKey,
+      // OpenRouter
+      openRouterApiKey: openRouterKey,
       // Settings
       sourceLang: els.sourceLang.value,
       targetLang: els.targetLang.value,
@@ -184,7 +184,7 @@ async function loadStats() {
 function getEngineName(engine: TranslationEngine): string {
   const names: Record<TranslationEngine, string> = {
     'deepl': 'DeepL (NMT)',
-    'groq-llm': 'Groq (LLM)',
+    'openrouter-llm': 'OpenRouter (LLM)',
   };
   return names[engine] || engine;
 }

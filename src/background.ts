@@ -27,11 +27,11 @@ function getDefaultSettings(): Settings {
     // API Keys
     deeplApiKey: CONSTANTS.DEFAULT_DEEPL_API_KEY,
     deeplIsFree: true,
-    groqApiKey: CONSTANTS.DEFAULT_GROQ_API_KEY,
+    openRouterApiKey: CONSTANTS.DEFAULT_OPENROUTER_API_KEY,
     // Translation Settings
     sourceLang: 'en',
     targetLang: 'ko',
-    primaryEngine: 'groq-llm', // 기본 엔진
+    primaryEngine: 'openrouter-llm', // 기본 엔진
     displayMode: 'parallel',
     cacheEnabled: true,
     viewportTranslation: true,
@@ -47,10 +47,10 @@ async function initialize() {
       settings = { ...defaults, ...stored }; // 새 필드 추가 시 기본값 병합
 
       // 마이그레이션 가드: 삭제된 엔진(google-nmt, gemini-llm) → deepl 자동 전환
-      const validEngines: TranslationEngine[] = ['deepl', 'groq-llm'];
+      const validEngines: TranslationEngine[] = ['deepl', 'openrouter-llm'];
       if (!validEngines.includes(settings.primaryEngine)) {
-        Logger.info('Background', `삭제된 엔진 '${settings.primaryEngine}' → 'groq-llm'으로 마이그레이션`);
-        settings.primaryEngine = 'groq-llm';
+        Logger.info('Background', `삭제된 엔진 '${settings.primaryEngine}' → 'openrouter-llm'으로 마이그레이션`);
+        settings.primaryEngine = 'openrouter-llm';
       }
 
       // 환경변수 API 키가 있으면 저장된 빈 키를 덮어씀 (개발 편의성)
@@ -62,10 +62,10 @@ async function initialize() {
         Logger.info('Background', 'DeepL API 키가 환경변수에서 로드됨');
       }
 
-      if (defaults.groqApiKey && !settings.groqApiKey) {
-        settings.groqApiKey = defaults.groqApiKey;
+      if (defaults.openRouterApiKey && !settings.openRouterApiKey) {
+        settings.openRouterApiKey = defaults.openRouterApiKey;
         needsUpdate = true;
-        Logger.info('Background', 'Groq API 키가 환경변수에서 로드됨');
+        Logger.info('Background', 'OpenRouter API 키가 환경변수에서 로드됨');
       }
 
       if (needsUpdate) {

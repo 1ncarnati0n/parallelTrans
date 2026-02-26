@@ -60,12 +60,12 @@ export const CONSTANTS = {
   MAX_RETRY_COUNT: 3,
   RETRY_DELAY_MS: 1000,
 
-  // Rate Limiting - Groq
-  RATE_LIMIT_GROQ: 200, // LPU 기반이지만 API 레이트 리밋 고려
+  // Rate Limiting - OpenRouter
+  RATE_LIMIT_OPENROUTER: 200, // API 레이트 리밋 고려
 
   // API 기본 키 (.env에서 자동 로드)
   DEFAULT_DEEPL_API_KEY: process.env.DEEPL_API_KEY || '',
-  DEFAULT_GROQ_API_KEY: process.env.GROQ_API_KEY || '',
+  DEFAULT_OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
 
   // 블록 레벨 요소
   BLOCK_ELEMENTS: ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH', 'BLOCKQUOTE', 'ARTICLE', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE', 'FIGCAPTION'],
@@ -78,16 +78,16 @@ export const CONSTANTS = {
 /**
  * 번역 엔진 타입
  * - deepl: DeepL API (NMT - Neural Machine Translation)
- * - groq-llm: Groq API (LPU-based ultra-fast LLM translation)
+ * - openrouter-llm: OpenRouter API (LLM translation)
  */
-export type TranslationEngine = 'deepl' | 'groq-llm';
+export type TranslationEngine = 'deepl' | 'openrouter-llm';
 export type DisplayMode = 'parallel' | 'translation-only';
 export type TriggerMode = 'auto' | 'manual';
 
 // 엔진 메타데이터
 export const ENGINE_INFO: Record<TranslationEngine, { name: string; type: 'nmt' | 'llm'; description: string }> = {
   'deepl': { name: 'DeepL', type: 'nmt', description: 'High quality NMT, fast' },
-  'groq-llm': { name: 'Groq', type: 'llm', description: 'Ultra-fast LPU-based LLM translation' },
+  'openrouter-llm': { name: 'OpenRouter', type: 'llm', description: 'OpenRouter LLM translation' },
 };
 
 // ============== 번역 요청/응답 ==============
@@ -119,7 +119,7 @@ export interface Settings {
   // API Keys
   deeplApiKey: string;
   deeplIsFree: boolean; // DeepL Free vs Pro
-  groqApiKey: string;   // Groq API 키
+  openRouterApiKey: string;   // OpenRouter API 키
   // Translation Settings
   sourceLang: string;
   targetLang: string;
